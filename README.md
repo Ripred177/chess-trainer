@@ -244,20 +244,22 @@ Or run `.github/workflows/build.yml`, which builds both targets on real runners.
 Buildable from Windows, and the artifact shipped from here:
 
 ```bash
-npm run dist:linux -- tar.gz            # -> release/*.tar.gz
+npx electron-builder --linux tar.gz --publish never
 ```
 
-It contains the same application: Linux Stockfish, the puzzle database, and the
-asar. Because it is packed on Windows, the executable bit may not survive, so
-after unpacking:
+`npm run dist:linux -- tar.gz` does *not* work: the extra argument lands after
+`--publish never` and electron-builder rejects it as a stray positional.
+
+Then restore the executable bits, which NTFS cannot represent:
 
 ```bash
-chmod +x chess-trainer chrome-sandbox resources/engine/stockfish
-./chess-trainer
+node scripts/fix-tar-modes.mjs "release/Chess Trainer-0.1.0-linux-x64.tar.gz"
 ```
 
-`engine.ts` already restores the engine's executable bit at runtime, so in
-practice only the launcher itself needs the `chmod`.
+That patches the launcher, `chrome-sandbox`, the crashpad handler and the
+engine to 0755 in the tar headers. Without it the extracted app fails with a
+bare "permission denied". `engine.ts` also restores the engine's bit at
+runtime, so that one is belt and braces.
 
 ## The web build
 

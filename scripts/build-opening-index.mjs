@@ -27,9 +27,15 @@ const before = statSync(DB).size
 console.log(`Indexing openings in ${DB}`)
 
 const db = new DatabaseSync(DB)
+// WAL while writing, so a crash part-way through cannot corrupt a database
+// that took hours to build. But the mode is recorded in the file header, and
+// a WAL database cannot be opened from a read-only install directory — which
+// is exactly where the packaged app puts it. Reset before closing.
 db.exec('PRAGMA journal_mode = WAL')
 const result = buildOpeningIndex(db)
 db.exec('PRAGMA optimize')
+db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+db.exec('PRAGMA journal_mode = DELETE')
 db.close()
 
 const after = statSync(DB).size
