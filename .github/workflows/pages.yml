@@ -1,0 +1,82 @@
+# Publishes the web build (PWA) to GitHub Pages.
+#
+# Only the assets that cannot be regenerated live in the repository: the puzzle
+# bands (their source is a 3GB database that cannot be committed) and the PWA
+# icons (rasterising them needs Electron, and therefore a display, which a
+# runner does not have). Piece art and the WASM engine are copied out of the
+# repo and node_modules by `web:assets` on every run.
+#
+# A project site is served from https://<user>.github.io/<repo>/, so the build
+# needs BASE_PATH set to that subdirectory or every asset resolves to the wrong
+# place. It is derived from the repository name automatically.
+
+name: Deploy PWA
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+
+# Pages needs these to publish; the token is scoped to this run only.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. In-progress runs finish rather than being
+# cancelled, so a half-published site is not left behind.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: actions/configure-pages@v5
+        id: pages
+
+      - name: Copy piece art and the WASM engine
+        run: npm run web:assets
+
+      - name: Fail early if the puzzle data is missing
+        run: |
+          if [ ! -f src/web/public/puzzles/index.json ]; then
+            echo "::error::src/web/public/puzzles/ is not in the repository."
+            echo "Generate it locally with 'npm run web:puzzles' and commit it —"
+            echo "it cannot be rebuilt here, because its source is a 3GB database."
+            exit 1
+          fi
+
+      - name: Build
+        # configure-pages emits "/repo-name"; the Vite config normalises it.
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: npm run web:build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

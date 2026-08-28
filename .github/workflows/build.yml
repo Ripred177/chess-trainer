@@ -1,0 +1,87 @@
+# Builds the Windows installer and the Linux AppImage from a clean checkout.
+#
+# The heavy assets are not in the repository, so each runner fetches the engine
+# and the Lichess dump and rebuilds the puzzle database from scratch. That takes
+# a few minutes but keeps the repo small and the build reproducible.
+#
+# AppImage cannot be produced on a Windows host, which is the whole reason this
+# workflow exists: the Linux job runs on a Linux runner.
+
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            engine: stockfish-windows-x86-64-avx2.zip
+          - os: ubuntu-latest
+            platform: linux
+            engine: stockfish-ubuntu-x86-64-avx2.tar
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      # npm 11 gates install scripts, which is what fetches Electron's binary.
+      - name: Ensure Electron binary
+        run: node node_modules/electron/install.js
+
+      - name: Fetch Stockfish (Windows)
+        if: matrix.platform == 'win'
+        shell: bash
+        run: |
+          mkdir -p assets/raw resources/engine/win
+          curl -L -o assets/raw/sf.zip \
+            "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/${{ matrix.engine }}"
+          unzip -j assets/raw/sf.zip '*/stockfish*.exe' -d resources/engine/win
+          mv resources/engine/win/stockfish-*.exe resources/engine/win/stockfish.exe
+
+      - name: Fetch Stockfish (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir -p assets/raw resources/engine/linux
+          curl -L -o assets/raw/sf.tar \
+            "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/${{ matrix.engine }}"
+          tar -xf assets/raw/sf.tar -C assets/raw stockfish/stockfish-ubuntu-x86-64-avx2
+          mv assets/raw/stockfish/stockfish-ubuntu-x86-64-avx2 resources/engine/linux/stockfish
+          chmod +x resources/engine/linux/stockfish
+
+      - name: Fetch piece sets
+        run: npm run assets:pieces
+
+      - name: Build puzzle database
+        shell: bash
+        run: |
+          curl -L -o assets/raw/lichess_db_puzzle.csv.zst \
+            https://database.lichess.org/lichess_db_puzzle.csv.zst
+          npm run puzzles:build
+
+      - name: Package
+        run: npx electron-builder --${{ matrix.platform }} --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chess-trainer-${{ matrix.platform }}
+          path: |
+            release/*.exe
+            release/*.AppImage
+          if-no-files-found: error
+          # The installers carry a 3GB database; skip re-compressing them.
+          compression-level: 0

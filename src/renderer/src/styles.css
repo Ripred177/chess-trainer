@@ -1,0 +1,336 @@
+@import 'tailwindcss';
+
+/*
+ * Tailwind v4 detects sources relative to the build root. The web build roots
+ * at src/web, so without this it would never scan the components in
+ * src/renderer/src and would emit almost no utilities. Pointing at this file's
+ * own directory covers both builds.
+ */
+@source "./";
+
+/*
+ * Design tokens.
+ *
+ * The app is dark by default with a light theme available. Every surface,
+ * border, and text colour resolves through a token so the two themes stay in
+ * step and board themes can be swapped independently of the chrome.
+ */
+
+@theme {
+  --font-sans: 'Inter var', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
+
+  --radius-card: 0.875rem;
+
+  --color-accent-400: oklch(0.78 0.13 155);
+  --color-accent-500: oklch(0.71 0.15 155);
+  --color-accent-600: oklch(0.63 0.15 155);
+
+  --color-danger-400: oklch(0.72 0.17 22);
+  --color-danger-500: oklch(0.64 0.19 22);
+
+  --color-warn-400: oklch(0.82 0.14 78);
+  --color-warn-500: oklch(0.75 0.15 78);
+
+  --color-info-400: oklch(0.76 0.12 240);
+  --color-info-500: oklch(0.68 0.14 240);
+}
+
+/* Dark is the default; `.theme-light` on <html> flips the surface ramp. */
+:root {
+  --surface-0: oklch(0.17 0.012 260);
+  --surface-1: oklch(0.21 0.014 260);
+  --surface-2: oklch(0.25 0.015 260);
+  --surface-3: oklch(0.30 0.016 260);
+  --border-subtle: oklch(0.32 0.015 260);
+  --border-strong: oklch(0.42 0.018 260);
+  --text-primary: oklch(0.96 0.004 260);
+  --text-secondary: oklch(0.76 0.012 260);
+  --text-muted: oklch(0.60 0.014 260);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 24px oklch(0 0 0 / 0.28);
+}
+
+.theme-light {
+  --surface-0: oklch(0.97 0.004 260);
+  --surface-1: oklch(1 0 0);
+  --surface-2: oklch(0.955 0.005 260);
+  --surface-3: oklch(0.91 0.008 260);
+  --border-subtle: oklch(0.89 0.006 260);
+  --border-strong: oklch(0.78 0.010 260);
+  --text-primary: oklch(0.22 0.014 260);
+  --text-secondary: oklch(0.42 0.014 260);
+  --text-muted: oklch(0.56 0.012 260);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.06), 0 8px 24px oklch(0 0 0 / 0.07);
+}
+
+@layer base {
+  * {
+    border-color: var(--border-subtle);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  /* env() cannot be read from JavaScript directly, but a custom property
+     holding it can be, which is how the board sizing accounts for the home
+     indicator. */
+  :root {
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  body {
+    margin: 0;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    /* A desktop app shouldn't rubber-band or offer text selection by default. */
+    overscroll-behavior: none;
+    user-select: none;
+    cursor: default;
+
+    /* Installed to a home screen this has to feel like an app, not a page:
+       no grey flash on tap, no double-tap zoom, no iOS text inflation in
+       landscape, and no long-press callout menu over the board. */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+  }
+
+  /* Buttons are the whole interface on a phone; make every one of them a
+     real target rather than relying on each caller to remember. */
+  button {
+    touch-action: manipulation;
+  }
+
+  /* Re-enable selection where reading actually matters. */
+  p,
+  code,
+  pre,
+  .selectable {
+    user-select: text;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+    background-clip: content-box;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .surface {
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+  }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 0.625rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-2);
+    color: var(--text-primary);
+    transition:
+      background 120ms ease,
+      border-color 120ms ease,
+      transform 80ms ease,
+      opacity 120ms ease;
+    white-space: nowrap;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--surface-3);
+    border-color: var(--border-strong);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  /*
+   * Touch input needs a bigger target than a mouse does. Keyed off the
+   * pointer type rather than width, so a touchscreen laptop gets it too and
+   * a narrow desktop window does not.
+   */
+  @media (pointer: coarse) {
+    .btn {
+      min-height: 44px;
+    }
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--color-accent-500);
+    border-color: var(--color-accent-500);
+    color: oklch(0.16 0.02 155);
+    font-weight: 600;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-accent-400);
+    border-color: var(--color-accent-400);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-2);
+    border-color: var(--border-subtle);
+  }
+
+  .btn-danger {
+    background: transparent;
+    border-color: var(--border-subtle);
+    color: var(--color-danger-400);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--color-danger-500) 14%, transparent);
+    border-color: var(--color-danger-500);
+  }
+
+  .input {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.625rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    user-select: text;
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--color-accent-500);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-accent-500) 22%, transparent);
+  }
+
+  .label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Board squares and pieces must never be dragged as browser images. */
+  .no-drag {
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+}
+
+/* Draws the eye to a clock that is about to flag. */
+@keyframes clock-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.62;
+  }
+}
+
+/* Respect the OS setting for users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer utilities {
+  /*
+   * iOS draws the app under the notch and the home indicator when the page
+   * asks for viewport-fit=cover, which it must to look native. These put the
+   * content back inside the safe area.
+   */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .top-safe {
+    top: env(safe-area-inset-top);
+  }
+
+  /* For a bar that sits at the bottom and must clear the home indicator
+     while keeping its own padding. */
+  .pb-safe-2 {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+}

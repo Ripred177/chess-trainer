@@ -1,0 +1,11 @@
+# Normalise line endings on commit. Without this, files authored on Windows
+# arrive in the repository with CRLF, and the `run: |` shell blocks in the CI
+# workflows fail on a Linux runner with an unhelpful "\r: command not found".
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.wasm binary
+*.zst binary
+*.db binary
+*.crt binary

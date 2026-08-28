@@ -1,0 +1,55 @@
+appId: com.greg.chesstrainer
+productName: Chess Trainer
+copyright: Copyright © 2026
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - out/**/*
+  - package.json
+  # `ws` is externalised from the main-process bundle, so it has to ship as a
+  # real module. electron-builder prunes devDependencies from this itself.
+  - node_modules/**/*
+
+asar: true
+
+# Compressing a 3GB database costs a great deal of build time for very little,
+# since the SQLite file is already dense.
+compression: store
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+  # The engine is a native binary, so each platform gets only its own build.
+  extraResources:
+    - from: resources/puzzles.db
+      to: puzzles.db
+    - from: resources/engine/win
+      to: engine
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Chess Trainer
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  category: Game
+  synopsis: Play Stockfish, solve six million puzzles, and learn chess
+  # Lets desktop environments associate the running window with the launcher.
+  syncDesktopName: true
+  extraResources:
+    - from: resources/puzzles.db
+      to: puzzles.db
+    - from: resources/engine/linux
+      to: engine
