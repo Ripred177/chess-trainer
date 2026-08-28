@@ -48,6 +48,11 @@ jobs:
 
       - uses: actions/configure-pages@v5
         id: pages
+        with:
+          # Turns Pages on and sets its source to Actions if it is not already.
+          # Without this the first run fails with "Get Pages site failed", and
+          # enabling it by hand in Settings is an easy step to miss.
+          enablement: true
 
       - name: Copy piece art and the WASM engine
         run: npm run web:assets
