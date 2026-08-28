@@ -241,7 +241,75 @@ export interface Profile {
   lessons: Record<string, LessonProgress>
   daily: Record<string, DailyRecord>
   streak: { current: number; longest: number; lastDate: string | null }
+  /** Structured study: Woodpecker sets, endgame and opening progress. */
+  training: TrainingState
   settings: Settings
+}
+
+// -------------------------------------------------------------- training ----
+
+/**
+ * The Woodpecker Method (Smith & Tikkanen): solve one fixed set of tactics,
+ * then solve the same set again and again, each cycle faster than the last.
+ * Nothing new is ever added — the point is to meet the old positions until
+ * recognition replaces calculation.
+ */
+export interface WoodpeckerCycle {
+  /** 1-based. */
+  index: number
+  startedAt: string
+  finishedAt: string | null
+  /** Time spent solving, excluding pauses between sessions. */
+  ms: number
+  solved: number
+  failed: number
+}
+
+export interface WoodpeckerSet {
+  id: string
+  createdAt: string
+  label: string
+  /** Fixed puzzle ids, in a fixed order. Never changes once created. */
+  puzzleIds: string[]
+  minRating: number
+  maxRating: number
+  themes: string[]
+  /** Completed cycles, plus the one in progress as the last entry. */
+  cycles: WoodpeckerCycle[]
+  /** Index into puzzleIds for the cycle in progress. */
+  cursor: number
+  /** Ids failed in the current cycle, surfaced for review at the end. */
+  missed: string[]
+  completedAt: string | null
+}
+
+/** Per-position progress in the endgame library. */
+export interface EndgameProgress {
+  positionId: string
+  attempts: number
+  successes: number
+  lastResult: 'win' | 'draw' | 'loss' | null
+  lastSeen: string | null
+}
+
+export interface TrainingState {
+  /** At most one Woodpecker set runs at a time; finished ones are archived. */
+  woodpecker: WoodpeckerSet | null
+  woodpeckerArchive: WoodpeckerSet[]
+  endgames: Record<string, EndgameProgress>
+  /** Openings the player has chosen to drill, as Lichess tag ids. */
+  openings: string[]
+}
+
+/** One opening, as indexed from the puzzle database's tags. */
+export interface OpeningSummary {
+  /** Lichess tag, e.g. "Sicilian_Defense_Najdorf_Variation". */
+  id: string
+  /** Human form, e.g. "Sicilian Defense: Najdorf Variation". */
+  name: string
+  family: string
+  isFamily: boolean
+  count: number
 }
 
 // -------------------------------------------------------------- settings ----

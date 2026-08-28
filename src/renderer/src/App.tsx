@@ -5,6 +5,7 @@ import {
   Puzzle as PuzzleIcon,
   CalendarDays,
   GraduationCap,
+  Dumbbell,
   Microscope,
   Users,
   History,
@@ -18,6 +19,7 @@ import PlayView from './views/PlayView'
 import PuzzlesView from './views/PuzzlesView'
 import DailyView from './views/DailyView'
 import LearnView from './views/LearnView'
+import TrainView from './views/TrainView'
 import AnalysisView from './views/AnalysisView'
 import FriendsView from './views/FriendsView'
 import GamesView from './views/GamesView'
@@ -31,6 +33,7 @@ const NAV: NavItem[] = [
   { id: 'puzzles', label: 'Puzzles', icon: PuzzleIcon, hint: 'Train on millions of tactics' },
   { id: 'daily', label: 'Daily', icon: CalendarDays, hint: "Today's puzzle and your streak" },
   { id: 'learn', label: 'Learn', icon: GraduationCap, hint: 'Lessons from beginner to expert' },
+  { id: 'train', label: 'Train', icon: Dumbbell, hint: 'Woodpecker, endgames, openings, studies' },
   { id: 'games', label: 'Games', icon: History, hint: 'Replay, export, and review your games' },
   { id: 'friends', label: 'Friends', icon: Users, hint: 'Play someone on your network' },
   { id: 'analysis', label: 'Analysis', icon: Microscope, hint: 'Analyse any position with Stockfish' },
@@ -38,11 +41,16 @@ const NAV: NavItem[] = [
 ]
 
 /**
- * Playing a friend needs a listening socket and UDP multicast for discovery.
- * A browser has neither, so the web build drops the section rather than
- * showing a screen that can only fail.
+ * Two sections cannot work in a browser and are dropped from the web build
+ * rather than shown as screens that can only fail:
+ *
+ * - Friends needs a listening socket and UDP multicast for discovery.
+ * - Train needs the SQLite opening index and a strong local engine, neither of
+ *   which the web export carries.
  */
-const SECTIONS = IS_WEB ? NAV.filter((item) => item.id !== 'friends') : NAV
+const WEB_EXCLUDED: ViewId[] = ['friends', 'train']
+
+const SECTIONS = IS_WEB ? NAV.filter((item) => !WEB_EXCLUDED.includes(item.id)) : NAV
 
 /**
  * A phone tab bar holds about five items before the labels stop being
@@ -122,6 +130,7 @@ export default function App(): React.JSX.Element {
       {view === 'puzzles' && <PuzzlesView />}
       {view === 'daily' && <DailyView />}
       {view === 'learn' && <LearnView />}
+      {view === 'train' && <TrainView />}
       {view === 'games' && <GamesView />}
       {view === 'friends' && <FriendsView />}
       {view === 'analysis' && <AnalysisView />}

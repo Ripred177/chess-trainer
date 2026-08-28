@@ -17,7 +17,10 @@ import type {
   DiscoveredHost,
   NetMessage,
   NetStatus,
-  TimeControl
+  TimeControl,
+  OpeningSummary,
+  WoodpeckerSet,
+  EndgameProgress
 } from '../shared/types.js'
 
 export interface AppInfo {
@@ -61,7 +64,31 @@ const api = {
     /** `date` is a local YYYY-MM-DD string. */
     daily: (date: string): Promise<Puzzle | null> => ipcRenderer.invoke('puzzles:daily', date),
     stats: (): Promise<PuzzleStats> => ipcRenderer.invoke('puzzles:stats'),
-    available: (): Promise<{ ok: boolean; error: string | null }> => ipcRenderer.invoke('puzzles:available')
+    available: (): Promise<{ ok: boolean; error: string | null }> => ipcRenderer.invoke('puzzles:available'),
+    /** Every opening the puzzle database has tags for, biggest first. */
+    openings: (): Promise<OpeningSummary[]> => ipcRenderer.invoke('puzzles:openings')
+  },
+
+  /** Structured study: Woodpecker sets, endgame drills, opening selection. */
+  training: {
+    startWoodpecker: (input: {
+      label: string
+      puzzleIds: string[]
+      minRating: number
+      maxRating: number
+      themes: string[]
+    }): Promise<WoodpeckerSet> => ipcRenderer.invoke('training:startWoodpecker', input),
+    recordWoodpecker: (input: { solved: boolean; ms: number }): Promise<WoodpeckerSet | null> =>
+      ipcRenderer.invoke('training:recordWoodpecker', input),
+    archiveWoodpecker: (): Promise<void> => ipcRenderer.invoke('training:archiveWoodpecker'),
+    recordEndgame: (
+      positionId: string,
+      result: 'win' | 'draw' | 'loss',
+      achieved: boolean
+    ): Promise<EndgameProgress> =>
+      ipcRenderer.invoke('training:recordEndgame', positionId, result, achieved),
+    setOpenings: (openings: string[]): Promise<string[]> =>
+      ipcRenderer.invoke('training:setOpenings', openings)
   },
 
   profile: {

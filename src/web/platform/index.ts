@@ -23,6 +23,10 @@ type ChessApi = Window['chess']
 const PUZZLE_BASE = `${import.meta.env.BASE_URL}puzzles/`
 const ENGINE_SCRIPT = `${import.meta.env.BASE_URL}engine/stockfish.js`
 
+function notAvailableTraining(): Promise<never> {
+  return Promise.reject(new Error('Structured training is only available in the desktop app.'))
+}
+
 function notAvailable(): Promise<never> {
   return Promise.reject(new Error('Playing a friend is only available in the desktop app.'))
 }
@@ -61,7 +65,18 @@ export async function installWebPlatform(): Promise<void> {
       byId: (id) => puzzles.byId(id),
       daily: (date) => puzzles.dailyPuzzle(date),
       stats: () => puzzles.stats(),
-      available: () => puzzles.available()
+      available: () => puzzles.available(),
+      // The opening index lives in the SQLite database, which the web export
+      // does not carry. The Train screen is hidden here for the same reason.
+      openings: async () => []
+    },
+
+    training: {
+      startWoodpecker: notAvailableTraining,
+      recordWoodpecker: async () => null,
+      archiveWoodpecker: async () => undefined,
+      recordEndgame: notAvailableTraining,
+      setOpenings: async () => []
     },
 
     profile: {

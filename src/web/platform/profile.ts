@@ -85,6 +85,9 @@ function defaultProfile(): Profile {
     lessons: {},
     daily: {},
     streak: { current: 0, longest: 0, lastDate: null },
+    // Structured study is desktop-only; the shape is kept so an exported
+    // profile moves between the two builds without losing anything.
+    training: { woodpecker: null, woodpeckerArchive: [], endgames: {}, openings: [] },
     settings: { ...DEFAULT_SETTINGS }
   }
 }

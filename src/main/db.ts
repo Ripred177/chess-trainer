@@ -1,6 +1,6 @@
 import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { existsSync } from 'node:fs'
-import type { Puzzle, PuzzleQuery, PuzzleStats } from '../shared/types.js'
+import type { Puzzle, PuzzleQuery, PuzzleStats, OpeningSummary } from '../shared/types.js'
 
 interface PuzzleRow {
   id: string
@@ -157,6 +157,24 @@ export class PuzzleDb {
     this.stmts.dailyAt = this.db.prepare(
       'SELECT p.* FROM daily_pool d JOIN puzzles p ON p.id = d.puzzle_id WHERE d.n = ?'
     )
+    // --- openings -----------------------------------------------------------
+    // A rating *range* plus ORDER BY rnd cannot use the index for ordering, so
+    // this sorts in a temp B-tree — but only over one opening's rows, which is
+    // a few thousand even for the Sicilian. Measured well under a millisecond.
+    this.stmts.openingSeek = this.db.prepare(
+      `SELECT puzzle_id FROM puzzle_openings
+         WHERE opening = ? AND rating BETWEEN ? AND ? AND rnd >= ?
+         ORDER BY rnd LIMIT ?`
+    )
+    this.stmts.openingSeekWrap = this.db.prepare(
+      `SELECT puzzle_id FROM puzzle_openings
+         WHERE opening = ? AND rating BETWEEN ? AND ? AND rnd < ?
+         ORDER BY rnd LIMIT ?`
+    )
+    this.stmts.openingList = this.db.prepare(
+      'SELECT opening, family, is_family, n FROM opening_counts ORDER BY n DESC'
+    )
+
     this.stmts.themeCounts = this.db.prepare(
       'SELECT theme, n AS count FROM theme_counts ORDER BY n DESC'
     )
@@ -213,6 +231,26 @@ export class PuzzleDb {
 
     const themes = query.themes?.filter(Boolean) ?? []
 
+    if (query.opening) {
+      // Over-fetch when themes will thin the result: an uncommon motif inside one
+      // opening is sparse, and limit*3 was returning half the puzzles asked for.
+      const overFetch = themes.length > 0 ? 12 : 3
+      const ids = this.sampleOpeningIds(query.opening, min, max, limit * overFetch, rand)
+      const puzzles = this.hydrate(ids)
+      // Themes narrow an opening rather than the other way round: there is no
+      // combined index, and an opening's slice is small enough to filter here.
+      const filtered =
+        themes.length === 0
+          ? puzzles
+          : puzzles.filter((puzzle) => {
+              const has = new Set(puzzle.themes)
+              return query.matchAll
+                ? themes.every((t) => has.has(t))
+                : themes.some((t) => has.has(t))
+            })
+      return filtered.slice(0, limit)
+    }
+
     if (themes.length === 0) return this.sampleByRating(min, max, limit, rand)
     if (themes.length === 1 && !query.matchAll) {
       return this.hydrate(this.sampleThemeIds(themes[0], min, max, limit, rand))
@@ -263,6 +301,57 @@ export class PuzzleDb {
     }
 
     return out.map(toPuzzle)
+  }
+
+  /** Openings have no per-rating cumulative table; the slice is small enough
+   *  that a direct seek from a random cursor is both simpler and fast. */
+  private sampleOpeningIds(
+    opening: string,
+    min: number,
+    max: number,
+    limit: number,
+    rand: () => number
+  ): string[] {
+    const cursor = Math.floor(rand() * RND_SPACE)
+    const rows = this.stmts.openingSeek.all(opening, min, max, cursor, limit) as unknown as {
+      puzzle_id: string
+    }[]
+    const wrapped =
+      rows.length < limit
+        ? (this.stmts.openingSeekWrap.all(
+            opening,
+            min,
+            max,
+            cursor,
+            limit - rows.length
+          ) as unknown as { puzzle_id: string }[])
+        : []
+
+    const seen = new Set<string>()
+    const ids: string[] = []
+    for (const row of [...rows, ...wrapped]) {
+      if (seen.has(row.puzzle_id)) continue
+      seen.add(row.puzzle_id)
+      ids.push(row.puzzle_id)
+    }
+    return ids
+  }
+
+  /** Every indexed opening, biggest first, for the opening picker. */
+  openings(): OpeningSummary[] {
+    const rows = this.stmts.openingList.all() as unknown as {
+      opening: string
+      family: string
+      is_family: number
+      n: number
+    }[]
+    return rows.map((r) => ({
+      id: r.opening,
+      name: r.opening.replace(/_/g, ' '),
+      family: r.family.replace(/_/g, ' '),
+      isFamily: r.is_family === 1,
+      count: r.n
+    }))
   }
 
   private sampleThemeIds(

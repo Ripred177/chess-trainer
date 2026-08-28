@@ -10,6 +10,9 @@ assets/raw/
 
 # Generated from the dump; 3.2GB, far too large for version control.
 resources/puzzles.db
+# SQLite WAL sidecars, written whenever the database is opened.
+resources/puzzles.db-shm
+resources/puzzles.db-wal
 
 # Downloaded binary, ~77MB.
 resources/engine/

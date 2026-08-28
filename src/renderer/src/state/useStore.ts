@@ -9,6 +9,7 @@ export type ViewId =
   | 'puzzles'
   | 'daily'
   | 'learn'
+  | 'train'
   | 'games'
   | 'friends'
   | 'analysis'

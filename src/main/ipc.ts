@@ -84,6 +84,25 @@ export function registerIpc(getWindow: () => BrowserWindow | null): () => Promis
   ipcMain.handle('puzzles:daily', (_e, date: string) => requirePuzzles().daily(date))
   ipcMain.handle('puzzles:stats', () => requirePuzzles().stats())
   ipcMain.handle('puzzles:available', () => ({ ok: puzzles != null, error: puzzleError }))
+  ipcMain.handle('puzzles:openings', () => requirePuzzles().openings())
+
+  // ----------------------------------------------------------- training ---
+
+  ipcMain.handle('training:startWoodpecker', (_e, input: Parameters<ProfileStore['startWoodpecker']>[0]) =>
+    profile.startWoodpecker(input)
+  )
+  ipcMain.handle('training:recordWoodpecker', (_e, input: { solved: boolean; ms: number }) =>
+    profile.recordWoodpecker(input)
+  )
+  ipcMain.handle('training:archiveWoodpecker', () => profile.archiveWoodpecker())
+  ipcMain.handle(
+    'training:recordEndgame',
+    (_e, positionId: string, result: 'win' | 'draw' | 'loss', achieved: boolean) =>
+      profile.recordEndgame(positionId, result, achieved)
+  )
+  ipcMain.handle('training:setOpenings', (_e, openings: string[]) =>
+    profile.setTrainingOpenings(openings)
+  )
 
   // ------------------------------------------------------------ profile ---
 

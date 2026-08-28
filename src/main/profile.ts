@@ -10,7 +10,10 @@ import type {
   RatingRecord,
   Settings,
   TimeCategory,
-  GameAnalysis
+  GameAnalysis,
+  TrainingState,
+  WoodpeckerSet,
+  EndgameProgress
 } from '../shared/types.js'
 
 const PROFILE_VERSION = 1
@@ -47,6 +50,12 @@ export const DEFAULT_SETTINGS: Settings = {
   lowTimeWarningSec: 10
 }
 
+/**
+ * Cycles in a Woodpecker set. Smith and Tikkanen run the same set five to
+ * seven times, halving the time taken; past that the returns disappear.
+ */
+const WOODPECKER_CYCLES = 7
+
 function newRating(rating = 1200, rd = 350): RatingRecord {
   return { rating, rd, plays: 0 }
 }
@@ -56,6 +65,10 @@ const PACES: TimeCategory[] = ['untimed', 'bullet', 'blitz', 'rapid', 'classical
 /** A fresh rating for every pace, so each is tracked independently. */
 function newPaceRatings(rating = 1200): Profile['paceRatings'] {
   return Object.fromEntries(PACES.map((p) => [p, newRating(rating)])) as Profile['paceRatings']
+}
+
+function emptyTraining(): TrainingState {
+  return { woodpecker: null, woodpeckerArchive: [], endgames: {}, openings: [] }
 }
 
 function defaultProfile(): Profile {
@@ -72,6 +85,7 @@ function defaultProfile(): Profile {
     lessons: {},
     daily: {},
     streak: { current: 0, longest: 0, lastDate: null },
+    training: emptyTraining(),
     settings: { ...DEFAULT_SETTINGS }
   }
 }
@@ -180,6 +194,8 @@ export class ProfileStore {
         lessons: raw.lessons ?? {},
         daily: raw.daily ?? {},
         streak: raw.streak ?? base.streak,
+        // Absent in profiles written before structured training existed.
+        training: { ...emptyTraining(), ...(raw.training ?? {}) },
         version: PROFILE_VERSION
       }
       return this.applyIdleDecay(merged)
@@ -404,6 +420,128 @@ export class ProfileStore {
         return now - new Date(l.lastSeen).getTime() >= l.intervalDays * 86_400_000
       })
       .map((l) => l.lessonId)
+  }
+
+  // ------------------------------------------------------------ training ---
+
+  /**
+   * Start a Woodpecker set. The puzzle list is fixed at creation and never
+   * changes — that is the whole method. A set in progress is archived rather
+   * than discarded so its cycle times stay visible.
+   */
+  startWoodpecker(input: {
+    label: string
+    puzzleIds: string[]
+    minRating: number
+    maxRating: number
+    themes: string[]
+  }): WoodpeckerSet {
+    if (this.data.training.woodpecker) {
+      this.data.training.woodpeckerArchive.push(this.data.training.woodpecker)
+      // Keep the archive from growing without bound.
+      if (this.data.training.woodpeckerArchive.length > 10) {
+        this.data.training.woodpeckerArchive.shift()
+      }
+    }
+
+    const now = new Date().toISOString()
+    const set: WoodpeckerSet = {
+      id: `wp_${Date.now().toString(36)}`,
+      createdAt: now,
+      label: input.label,
+      puzzleIds: input.puzzleIds,
+      minRating: input.minRating,
+      maxRating: input.maxRating,
+      themes: input.themes,
+      cycles: [{ index: 1, startedAt: now, finishedAt: null, ms: 0, solved: 0, failed: 0 }],
+      cursor: 0,
+      missed: [],
+      completedAt: null
+    }
+    this.data.training.woodpecker = set
+    this.scheduleSave()
+    return set
+  }
+
+  /**
+   * Record one solved or failed attempt inside the current cycle and advance.
+   * When the cursor reaches the end, the cycle closes and the next one opens
+   * with the cursor back at zero — same puzzles, same order.
+   */
+  recordWoodpecker(input: { solved: boolean; ms: number }): WoodpeckerSet | null {
+    const set = this.data.training.woodpecker
+    if (!set || set.completedAt) return set
+
+    const cycle = set.cycles[set.cycles.length - 1]
+    cycle.ms += Math.max(0, input.ms)
+    if (input.solved) cycle.solved++
+    else {
+      cycle.failed++
+      const id = set.puzzleIds[set.cursor]
+      if (id && !set.missed.includes(id)) set.missed.push(id)
+    }
+
+    set.cursor++
+    if (set.cursor >= set.puzzleIds.length) {
+      cycle.finishedAt = new Date().toISOString()
+      set.cursor = 0
+      set.missed = []
+      // Seven cycles is where the method's own authors stop.
+      if (set.cycles.length >= WOODPECKER_CYCLES) {
+        set.completedAt = cycle.finishedAt
+      } else {
+        set.cycles.push({
+          index: set.cycles.length + 1,
+          startedAt: cycle.finishedAt,
+          finishedAt: null,
+          ms: 0,
+          solved: 0,
+          failed: 0
+        })
+      }
+    }
+
+    this.scheduleSave()
+    return set
+  }
+
+  /** Abandon the current set, keeping it in the archive for its history. */
+  archiveWoodpecker(): void {
+    const set = this.data.training.woodpecker
+    if (!set) return
+    this.data.training.woodpeckerArchive.push(set)
+    if (this.data.training.woodpeckerArchive.length > 10) {
+      this.data.training.woodpeckerArchive.shift()
+    }
+    this.data.training.woodpecker = null
+    this.scheduleSave()
+  }
+
+  recordEndgame(positionId: string, result: 'win' | 'draw' | 'loss', achieved: boolean): EndgameProgress {
+    const prev: EndgameProgress = this.data.training.endgames[positionId] ?? {
+      positionId,
+      attempts: 0,
+      successes: 0,
+      lastResult: null,
+      lastSeen: null
+    }
+    const next: EndgameProgress = {
+      positionId,
+      attempts: prev.attempts + 1,
+      successes: prev.successes + (achieved ? 1 : 0),
+      lastResult: result,
+      lastSeen: new Date().toISOString()
+    }
+    this.data.training.endgames[positionId] = next
+    this.scheduleSave()
+    return next
+  }
+
+  setTrainingOpenings(openings: string[]): string[] {
+    // Deduplicated and capped: this drives a picker, not a corpus.
+    this.data.training.openings = [...new Set(openings)].slice(0, 24)
+    this.scheduleSave()
+    return this.data.training.openings
   }
 
   export(): string {

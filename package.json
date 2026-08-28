@@ -29,7 +29,9 @@
     "web:cert": "node scripts/make-lan-cert.mjs",
     "web:serve": "node scripts/serve.mjs dist-web --https --port 8443 --http-port 8080",
     "web:serve:http": "node scripts/serve.mjs dist-web --port 8080",
-    "web:icons": "node scripts/build-web-icons.mjs"
+    "web:icons": "node scripts/build-web-icons.mjs",
+    "puzzles:openings": "node scripts/build-opening-index.mjs",
+    "verify:endgames": "node scripts/verify-endgames.mjs"
   },
   "dependencies": {
     "chess.js": "^1.4.0",
