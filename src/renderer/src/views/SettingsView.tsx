@@ -672,6 +672,7 @@ function EngineTab(): React.JSX.Element {
  */
 function OfflineSection(): React.JSX.Element | null {
   const [status, setStatus] = useState<{ ready: number; total: number; bytes: number } | null>(null)
+  const [totalMb, setTotalMb] = useState<number | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -680,6 +681,10 @@ function OfflineSection(): React.JSX.Element | null {
     if (!api) return
     try {
       setStatus(await api.status())
+      // Estimate from the real puzzle count rather than a number baked in
+      // here that goes stale the moment the export changes.
+      const stats = await window.chess.puzzles.stats()
+      setTotalMb(Math.round((stats.total * 138) / 1e6))
     } catch {
       setStatus(null)
     }
@@ -693,7 +698,7 @@ function OfflineSection(): React.JSX.Element | null {
 
   const download = async (): Promise<void> => {
     setError(null)
-    setProgress({ done: 0, total: 13 })
+    setProgress({ done: 0, total: status?.total ?? 1 })
     try {
       await window.chessOffline!.downloadAll((done, total) => setProgress({ done, total }))
       await refresh()
@@ -747,7 +752,13 @@ function OfflineSection(): React.JSX.Element | null {
         disabled={progress != null || complete}
       >
         <Download size={15} />
-        {complete ? 'All puzzles stored' : progress ? 'Downloading…' : 'Download all puzzles (~15 MB)'}
+        {complete
+          ? 'All puzzles stored'
+          : progress
+            ? 'Downloading…'
+            : totalMb
+              ? `Download all puzzles (~${totalMb} MB)`
+              : 'Download all puzzles'}
       </button>
 
       {error && (

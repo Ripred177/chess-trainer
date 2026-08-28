@@ -106,9 +106,10 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'puzzle-bands',
-              // 12 bands + the daily pool + the index, with room to spare, so
-              // a full offline download is never evicted part-way.
-              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              // 48 shards + the daily pool + the index, with room to spare.
+              // This ceiling must exceed the shard count, or a full offline
+              // download would quietly evict its own earliest files.
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 365 },
               cacheableResponse: { statuses: [0, 200] }
             }
           }

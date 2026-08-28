@@ -4,8 +4,8 @@ import type { Puzzle, PuzzleQuery, PuzzleStats } from '@shared/types'
  * Puzzle access for the web build.
  *
  * The desktop app queries 6.1M puzzles in SQLite. Here the data is a sampled
- * slice sharded into 200-point rating bands, so a request loads one ~450KB
- * band rather than a 3GB file. Bands are cached after first use, which is what
+ * slice sharded into 50-point rating bands, so a request loads one ~1MB shard
+ * rather than a 3GB file. Shards are cached after first use, which is what
  * makes the second puzzle in a session instant.
  */
 
@@ -17,6 +17,20 @@ interface PackedIndex {
   daily: { file: string; count: number }
   themes: { theme: string; count: number }[]
 }
+
+/**
+ * How many shards one query may download. Shards are ~1MB gzipped, so this
+ * bounds a single request at a few megabytes even when a rare motif forces
+ * the search to widen.
+ */
+const MAX_FETCHES_PER_QUERY = 3
+
+/**
+ * Rating points of noise added when ranking shards by distance. Large enough
+ * that neighbouring shards trade places between visits, small enough that the
+ * search never wanders far from the requested range.
+ */
+const BAND_JITTER = 60
 
 /** [id, fen, moves, rating, themes] — keys would triple the download. */
 type PackedPuzzle = [string, string, string, number, string]
@@ -131,26 +145,42 @@ export class WebPuzzles {
     const out: Puzzle[] = []
     const seen = new Set<string>()
 
-    // Try bands in a shuffled order so the same band is not always drained
-    // first, then widen if a themed request cannot be satisfied.
-    const order = [...bands]
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1))
-      ;[order[i], order[j]] = [order[j], order[i]]
-    }
+    // Ordering matters more at 50-point shards than it did at 200: a wide or
+    // narrowly-themed request could otherwise touch dozens of files. Take
+    // already-loaded shards first (they are free), then those nearest the
+    // middle of the requested range, so whatever does get downloaded is at the
+    // player's level. The jitter stops equally-close shards from always
+    // resolving the same way.
+    const centre = (Math.max(min, 0) + Math.min(max, 4000)) / 2
+    const order = [...bands].sort((a, b) => {
+      const loaded = Number(this.bands.has(b.file)) - Number(this.bands.has(a.file))
+      if (loaded !== 0) return loaded
+      const da = Math.abs((a.lo + a.hi) / 2 - centre) + rand() * BAND_JITTER
+      const db = Math.abs((b.lo + b.hi) / 2 - centre) + rand() * BAND_JITTER
+      return da - db
+    })
 
     let loadedAny = false
     let lastError: unknown = null
+    let fetches = 0
 
     for (const band of order) {
       if (out.length >= limit) break
 
+      // Cap what a single request may pull over the network. An uncommon motif
+      // may genuinely not appear in the nearest shards, and walking all 48 to
+      // prove it would cost well over a hundred megabytes. Returning fewer
+      // puzzles is the better failure.
+      const cached = this.bands.has(band.file)
+      if (!cached && fetches >= MAX_FETCHES_PER_QUERY && out.length > 0) break
+
       // Offline, only the bands already in the cache will load. Skipping the
       // rest is the difference between "some puzzles" and none at all — and
-      // since the order is shuffled, failing hard here made it a coin flip
+      // since the order was shuffled, failing hard here made it a coin flip
       // whether any puzzles appeared.
       let puzzles: Puzzle[]
       try {
+        if (!cached) fetches++
         puzzles = await this.loadBand(band.file)
         loadedAny = true
       } catch (err) {

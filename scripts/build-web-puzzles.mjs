@@ -3,8 +3,9 @@
  *
  * The desktop app carries all 6.1M puzzles in a 3.1GB SQLite file, which is
  * obviously not going on a phone. Puzzles compress extremely well in a compact
- * array form — about 129 bytes each — so a hundred thousand of them costs
- * roughly 4MB gzipped, which is entirely reasonable to cache offline.
+ * array form — about 138 bytes each — so a million of them costs roughly
+ * 48MB gzipped, which is reasonable to cache offline in full and cheap to
+ * sample from in 50-point slices.
  *
  * Puzzles are sharded by rating band so the app loads only the band it needs.
  * Themed filtering then happens inside the loaded band, which is why each band
@@ -26,10 +27,18 @@ const OUT = resolve(root, 'src/web/public/puzzles')
 
 const args = process.argv.slice(2)
 const perBandArg = args.indexOf('--per-band')
-const PER_BAND = perBandArg >= 0 ? Number(args[perBandArg + 1]) : 9000
+const PER_BAND = perBandArg >= 0 ? Number(args[perBandArg + 1]) : 21000
 
-/** 200-point bands from beginner to master. */
-const BAND_SIZE = 200
+/**
+ * 50-point shards from beginner to master.
+ *
+ * Narrow shards matter more than the total count. A request only ever loads
+ * the shard covering the player's rating, so halving the width quarters the
+ * rating spread of what gets downloaded while raising the depth available at
+ * that exact level — which is what makes filtering by an uncommon motif
+ * return more than a handful of positions.
+ */
+const BAND_SIZE = 50
 const MIN_RATING = 400
 const MAX_RATING = 2800
 

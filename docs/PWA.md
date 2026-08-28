@@ -9,7 +9,7 @@ It compiles the *same* renderer as the desktop app. Only the layer underneath
 | | Desktop | Web |
 |---|---|---|
 | Engine | Stockfish 18 native, UCI over stdio | Stockfish (2019 build) WASM in a Web Worker |
-| Puzzles | 6.1M rows in a 3.1GB SQLite file | 108,000 rows in 12 sharded JSON bands |
+| Puzzles | 6.1M rows in a 3.1GB SQLite file | 1,008,000 rows in 48 sharded JSON bands |
 | Profile | JSON file in Electron's userData | IndexedDB |
 | Play a friend | TCP + UDP multicast discovery | **not available** — the section is removed |
 
@@ -59,12 +59,17 @@ npm run web:preview
 | Stockfish WASM | 2.2 MB |
 | Piece art (17 sets) | 2.5 MB |
 | Icons | 0.25 MB |
-| **Precached on install** | **~4.2 MB** |
-| Puzzle bands (12 × ~1.3 MB) | 15 MB raw, 5.3 MB over the wire |
+| **Precached on install** | **~4.5 MB** |
+| Puzzle shards (48 × ~3 MB) | 141 MB raw, 48 MB over the wire |
 
-Puzzle bands are **not** precached. They are fetched the first time you play at
-that rating and then cached forever, so a normal install downloads about 4 MB
-and grows by roughly 450 KB (gzipped) per rating band you actually visit.
+Puzzle shards are **not** precached. Each covers 50 rating points, and a
+request loads only the shard nearest the rating asked for — one file, about
+1 MB gzipped, then cached forever. So a normal install downloads about 4.5 MB
+and grows by roughly 1 MB per rating neighbourhood actually played.
+
+Narrow shards are what make filtering by an uncommon motif work. At 1400-1600
+the set holds 84,000 puzzles rather than 9,000, and the number of themes with
+fewer than ten positions at that level falls from 13 to 1.
 
 ## Deploy it
 
@@ -208,10 +213,12 @@ import on another device.
 **Private browsing may refuse IndexedDB.** The app still runs, but nothing is
 saved; Settings → Profile says so rather than failing silently.
 
-**Puzzles are a sample, not the whole database.** 108,000 of the 6.1M, evenly
-spread across twelve 200-point rating bands, so themed filtering still has
-enough to draw on. Raise it with `node scripts/build-web-puzzles.mjs --per-band
-20000` if you would rather trade download size for variety.
+**Puzzles are a sample, not the whole database.** 1,008,000 of the 6.1M, evenly
+spread across 48 fifty-point shards. The full export is possible but a poor
+trade: 840MB raw would put two shards over GitHub's hard 100MB per-file limit,
+leave a GitHub Pages site at 84% of its 1GB ceiling, and turn "download all"
+into 295MB — to deepen motifs that a million already covers. Adjust either way
+with `node scripts/build-web-puzzles.mjs --per-band N`.
 
 **Playing a friend is desktop-only.** It needs a listening socket and UDP
 multicast for LAN discovery. A browser has neither, so the section is removed
