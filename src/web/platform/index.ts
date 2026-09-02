@@ -76,6 +76,7 @@ export async function installWebPlatform(): Promise<void> {
     training: {
       startWoodpecker: notAvailableTraining,
       recordWoodpecker: async () => null,
+      restartWoodpecker: notAvailableTraining,
       archiveWoodpecker: async () => undefined,
       recordEndgame: notAvailableTraining,
       setOpenings: async () => []

@@ -94,6 +94,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): () => Promis
   ipcMain.handle('training:recordWoodpecker', (_e, input: { solved: boolean; ms: number }) =>
     profile.recordWoodpecker(input)
   )
+  ipcMain.handle('training:restartWoodpecker', () => profile.restartWoodpecker())
   ipcMain.handle('training:archiveWoodpecker', () => profile.archiveWoodpecker())
   ipcMain.handle(
     'training:recordEndgame',

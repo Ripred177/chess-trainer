@@ -1,5 +1,12 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs'
+import {
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync
+} from 'node:fs'
 import { join, dirname } from 'node:path'
 import type {
   DailyRecord,
@@ -163,10 +170,51 @@ export class ProfileStore {
     this.data = this.load()
   }
 
+  /** The previous good copy, kept so a lost or damaged profile is recoverable. */
+  private get backupPath(): string {
+    return `${this.path}.bak`
+  }
+
   private load(): Profile {
-    if (!existsSync(this.path)) return defaultProfile()
+    // A missing profile used to mean "new player, start fresh", which silently
+    // discards a lifetime of history if the file disappears for any reason —
+    // and the first save afterwards makes that permanent. Fall back to the
+    // backup before concluding there is nothing here.
+    if (!existsSync(this.path)) {
+      const rescued = this.loadFrom(this.backupPath)
+      if (rescued) {
+        console.warn('Profile missing; recovered from backup.')
+        return rescued
+      }
+      return defaultProfile()
+    }
+
+    const loaded = this.loadFrom(this.path)
+    if (loaded) return loaded
+
+    // Unreadable. Keep the bad file for forensics, then try the backup rather
+    // than throwing the history away.
     try {
-      const raw = JSON.parse(readFileSync(this.path, 'utf8')) as Partial<Profile>
+      renameSync(this.path, `${this.path}.corrupt-${Date.now()}`)
+    } catch {
+      /* best effort */
+    }
+    const rescued = this.loadFrom(this.backupPath)
+    if (rescued) {
+      console.warn('Profile unreadable; recovered from backup.')
+      return rescued
+    }
+    return defaultProfile()
+  }
+
+  /** Parse and migrate one profile file, or null if it cannot be read. */
+  private loadFrom(path: string): Profile | null {
+    if (!existsSync(path)) return null
+    try {
+      // Tolerate a byte-order mark: an editor or a shell redirect can add one,
+      // and JSON.parse rejects it outright.
+      const text = readFileSync(path, 'utf8').replace(/^﻿/, '')
+      const raw = JSON.parse(text) as Partial<Profile>
       const base = defaultProfile()
       const merged: Profile = {
         ...base,
@@ -200,15 +248,8 @@ export class ProfileStore {
       }
       return this.applyIdleDecay(merged)
     } catch (err) {
-      // A corrupt profile shouldn't block startup; keep the bad file for
-      // forensics and continue with a fresh one.
-      console.error('Failed to read profile, starting fresh:', err)
-      try {
-        renameSync(this.path, `${this.path}.corrupt-${Date.now()}`)
-      } catch {
-        /* best effort */
-      }
-      return defaultProfile()
+      console.error(`Failed to read profile at ${path}:`, err)
+      return null
     }
   }
 
@@ -241,6 +282,18 @@ export class ProfileStore {
     }
     const dir = dirname(this.path)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+
+    // Keep the last good copy before replacing it. The file is a few kilobytes
+    // and saves are already debounced, so the cost is nothing against losing a
+    // player's entire history to one bad write.
+    if (existsSync(this.path)) {
+      try {
+        copyFileSync(this.path, this.backupPath)
+      } catch {
+        /* a missing backup must never stop the save itself */
+      }
+    }
+
     const tmp = `${this.path}.tmp`
     writeFileSync(tmp, JSON.stringify(this.data, null, 2), 'utf8')
     renameSync(tmp, this.path)
@@ -357,15 +410,20 @@ export class ProfileStore {
   /**
    * Record the daily puzzle result and advance the streak.
    *
-   * The streak counts consecutive calendar days with a solve; a gap of more
-   * than one day resets it. Re-recording the same day is idempotent so a
-   * refresh can't inflate the count.
+   * The streak counts consecutive calendar days *played*, not days solved. A
+   * streak you can lose by getting a hard puzzle wrong punishes you for the
+   * one thing the daily puzzle is for, and quietly encourages skipping a day
+   * rather than risking the run. Turning up is the habit worth tracking; how
+   * many you solved is already shown next to it.
+   *
+   * A gap of more than one day still resets it. Re-recording the same day is
+   * idempotent, so a refresh cannot inflate the count.
    */
   recordDaily(record: DailyRecord): Profile['streak'] {
     const existing = this.data.daily[record.date]
     this.data.daily[record.date] = record
 
-    if (record.solved && !existing?.solved) {
+    if (!existing) {
       const last = this.data.streak.lastDate
       const yesterday = new Date(new Date(record.date + 'T00:00:00').getTime() - 86_400_000)
         .toISOString()
@@ -446,7 +504,9 @@ export class ProfileStore {
 
     const now = new Date().toISOString()
     const set: WoodpeckerSet = {
-      id: `wp_${Date.now().toString(36)}`,
+      // Restarting a set archives the old run and creates the new one in the
+      // same tick, so a timestamp alone is not unique enough to key them by.
+      id: `wp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
       createdAt: now,
       label: input.label,
       puzzleIds: input.puzzleIds,
@@ -503,6 +563,28 @@ export class ProfileStore {
 
     this.scheduleSave()
     return set
+  }
+
+  /**
+   * Run the same set again from cycle one, with the same puzzles in the same
+   * order — which is the point of the method, so the times are comparable.
+   *
+   * The previous run is archived rather than dropped. Its cycle times are the
+   * entire record of whether the method worked for you, and losing them to a
+   * stray click would be worse than keeping a run nobody finished.
+   */
+  restartWoodpecker(): WoodpeckerSet | null {
+    const set = this.data.training.woodpecker
+    if (!set) return null
+
+    // startWoodpecker archives whatever is current before it replaces it.
+    return this.startWoodpecker({
+      label: set.label,
+      puzzleIds: set.puzzleIds,
+      minRating: set.minRating,
+      maxRating: set.maxRating,
+      themes: set.themes
+    })
   }
 
   /** Abandon the current set, keeping it in the archive for its history. */

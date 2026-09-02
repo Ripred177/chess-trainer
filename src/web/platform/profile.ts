@@ -295,11 +295,12 @@ export class WebProfile {
     return true
   }
 
+  /** Days played, not days solved — see the desktop ProfileStore for why. */
   recordDaily(record: Profile['daily'][string]): Profile['streak'] {
     const existing = this.data.daily[record.date]
     this.data.daily[record.date] = record
 
-    if (record.solved && !existing?.solved) {
+    if (!existing) {
       const yesterday = new Date(new Date(record.date + 'T00:00:00').getTime() - 86_400_000)
         .toISOString()
         .slice(0, 10)

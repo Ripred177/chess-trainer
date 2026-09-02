@@ -49,13 +49,26 @@ export default function DailyView(): React.JSX.Element {
       .finally(() => setLoading(false))
   }, [today, puzzlesAvailable])
 
+  /**
+   * Play today's puzzle again from the start.
+   *
+   * The day is already recorded, so this only clears the presentation.
+   */
+  const replayPuzzle = useCallback(() => {
+    setRevealed(false)
+    setOutcome(null)
+    setHintRequest(0)
+    setRestartRequest((n) => n + 1)
+  }, [])
+
   const onComplete = useCallback(
     async (result: PuzzleResult) => {
       if (!puzzle) return
       setOutcome(result)
 
-      // Only the first attempt of the day counts toward the streak.
-      if (!alreadyDone) {
+      // Only the first attempt of the day is recorded. `replay` covers a repeat
+      // within this session; `alreadyDone` covers coming back to the same day.
+      if (!alreadyDone && !result.replay) {
         await window.chess.profile.recordDaily({
           date: today,
           puzzleId: puzzle.id,
@@ -124,7 +137,7 @@ export default function DailyView(): React.JSX.Element {
         <Stat
           label="Current streak"
           value={streak?.current ?? 0}
-          sub={streak?.current === 1 ? 'day' : 'days'}
+          sub={streak?.current === 1 ? 'day played' : 'days played'}
           tone={streak && streak.current > 0 ? 'warn' : 'default'}
         />
         <Stat label="Longest streak" value={streak?.longest ?? 0} sub="days" />
@@ -161,8 +174,8 @@ export default function DailyView(): React.JSX.Element {
                 <Check size={16} /> Already played today
               </div>
               <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                You {alreadyDone.solved ? 'solved' : 'missed'} today&apos;s puzzle. Play it again for practice —
-                it will not change your streak.
+                You {alreadyDone.solved ? 'solved' : 'missed'} today&apos;s puzzle, and the day is on your
+                streak either way. Play it again as often as you like — nothing recorded will change.
               </p>
             </div>
           )}
@@ -256,12 +269,12 @@ export default function DailyView(): React.JSX.Element {
             </div>
           )}
 
-          {!finished && puzzle && (
+          {puzzle && (
             <div className="grid grid-cols-2 gap-2 mb-3">
               <button
                 className="btn"
                 onClick={() => setHintRequest((n) => Math.min(n + 1, MAX_HINT_LEVEL))}
-                disabled={hintRequest >= MAX_HINT_LEVEL}
+                disabled={finished || hintRequest >= MAX_HINT_LEVEL}
                 title="Each press reveals a little more, starting with what the puzzle is about"
               >
                 <Lightbulb size={15} /> {hintRequest === 0 ? 'Hint' : `Hint ${hintRequest}/${MAX_HINT_LEVEL}`}
@@ -272,23 +285,33 @@ export default function DailyView(): React.JSX.Element {
                   setRevealed(true)
                   setRevealRequest((n) => n + 1)
                 }}
+                disabled={finished}
               >
                 <Eye size={15} /> Solution
               </button>
               <button
                 className="btn"
                 onClick={() => setRewindRequest((n) => n + 1)}
-                disabled={!progress.canRewind}
+                disabled={finished || !progress.canRewind}
                 title="Step back one move so you can try a different continuation"
               >
                 <Undo2 size={15} /> Rewind
               </button>
+              {/*
+                Deliberately live after the puzzle is over: today's result is
+                already banked, so replaying it costs nothing and is the most
+                useful thing you can do with a puzzle you just got wrong.
+              */}
               <button
                 className="btn"
-                onClick={() => setRestartRequest((n) => n + 1)}
-                title="Back to the start of today's puzzle"
+                onClick={replayPuzzle}
+                title={
+                  finished
+                    ? "Play today's puzzle again. Your streak and result will not change."
+                    : "Back to the start of today's puzzle"
+                }
               >
-                <RotateCcw size={15} /> Restart
+                <RotateCcw size={15} /> {finished ? 'Try again' : 'Restart'}
               </button>
             </div>
           )}

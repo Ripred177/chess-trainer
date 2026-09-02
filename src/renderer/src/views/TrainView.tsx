@@ -51,6 +51,16 @@ function formatDuration(ms: number): string {
 
 export default function TrainView(): React.JSX.Element {
   const [method, setMethod] = useState<Method>('menu')
+  const profile = useStore((s) => s.profile)
+
+  // A set in progress is the most useful thing this screen can tell you, and
+  // without it there is no way to know from here that anything is saved.
+  const woodpecker = profile?.training.woodpecker ?? null
+  const woodpeckerMeta = woodpecker
+    ? woodpecker.completedAt
+      ? `Set finished · all ${woodpecker.cycles.length} cycles done`
+      : `In progress · cycle ${woodpecker.cycles.length} of 7 · ${woodpecker.cursor} / ${woodpecker.puzzleIds.length}`
+    : 'Smith & Tikkanen · a long commitment'
 
   if (method !== 'menu') {
     return (
@@ -77,7 +87,8 @@ export default function TrainView(): React.JSX.Element {
           icon={Bird}
           title="The Woodpecker Method"
           blurb="Solve one fixed set of tactics, then solve it again and again, faster each time. Nothing new is added — the point is to meet the old positions until recognition replaces calculation."
-          meta="Smith & Tikkanen · a long commitment"
+          meta={woodpeckerMeta}
+          highlight={woodpecker != null && !woodpecker.completedAt}
           onClick={() => setMethod('woodpecker')}
         />
         <MethodCard
@@ -111,16 +122,23 @@ function MethodCard({
   title,
   blurb,
   meta,
+  highlight = false,
   onClick
 }: {
   icon: typeof Bird
   title: string
   blurb: string
   meta: string
+  /** Draws attention to a method with work already under way. */
+  highlight?: boolean
   onClick: () => void
 }): React.JSX.Element {
   return (
-    <button className="card p-5 text-left transition-colors hover:brightness-110" onClick={onClick}>
+    <button
+      className="card p-5 text-left transition-colors hover:brightness-110"
+      style={highlight ? { borderColor: 'var(--color-accent-500)' } : undefined}
+      onClick={onClick}
+    >
       <div className="flex items-center gap-2.5 mb-2">
         <Icon size={19} style={{ color: 'var(--color-accent-400)' }} />
         <span className="font-semibold">{title}</span>
@@ -128,7 +146,13 @@ function MethodCard({
       <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
         {blurb}
       </p>
-      <div className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>
+      <div
+        className="text-xs mt-3"
+        style={{
+          color: highlight ? 'var(--color-accent-400)' : 'var(--text-muted)',
+          fontWeight: highlight ? 600 : undefined
+        }}
+      >
         {meta}
       </div>
     </button>
@@ -315,6 +339,13 @@ function WoodpeckerRunner({
     [onChanged]
   )
 
+  /** Same puzzles, cycle one again; the run so far is kept in the archive. */
+  const restart = async (): Promise<void> => {
+    await window.chess.training.restartWoodpecker()
+    await onChanged()
+  }
+
+  /** Back to the setup screen to build a different set entirely. */
   const abandon = async (): Promise<void> => {
     await window.chess.training.archiveWoodpecker()
     await onChanged()
@@ -331,9 +362,22 @@ function WoodpeckerRunner({
         title={`Woodpecker · cycle ${cycle.index} of 7`}
         subtitle={set.label}
         actions={
-          <button className="btn" onClick={() => void abandon()}>
-            <Trash2 size={15} /> Abandon set
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="btn"
+              onClick={() => void restart()}
+              title="Start this set again from cycle one. The run so far is kept in your history."
+            >
+              <RotateCcw size={15} /> Start over
+            </button>
+            <button
+              className="btn"
+              onClick={() => void abandon()}
+              title="Put this set aside and build a different one"
+            >
+              <Trash2 size={15} /> New set
+            </button>
+          </div>
         }
       />
 

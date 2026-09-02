@@ -13,6 +13,13 @@ export interface PuzzleResult {
   solved: boolean
   ms: number
   hints: number
+  /**
+   * True when this is a repeat run of a puzzle already finished once.
+   *
+   * Replays are for practice: the first attempt is what counts, so callers
+   * should show the outcome but not rate it or count it again.
+   */
+  replay: boolean
 }
 
 export interface PuzzleSolverProps {
@@ -25,7 +32,13 @@ export interface PuzzleSolverProps {
   revealRequest?: number
   /** Step back one move pair, incremented by the parent's rewind button. */
   rewindRequest?: number
-  /** Return to the puzzle's opening position, keeping the attempt's history. */
+  /**
+   * Return to the puzzle's opening position.
+   *
+   * Mid-attempt this only rewinds the board, keeping the mistakes already made.
+   * Once the puzzle is over it starts a genuinely fresh attempt instead, since
+   * the result is already banked and what the player wants is another go.
+   */
   restartRequest?: number
   /**
    * Progress within the attempt, so the parent can show "try again" without
@@ -99,6 +112,8 @@ export default function PuzzleSolver({
 
   const startedAt = useRef(Date.now())
   const completed = useRef(false)
+  /** Whether this puzzle has been finished once already, making the next run a replay. */
+  const scoredOnce = useRef(false)
   /** Last move of the real solution line, restored after a rewind. */
   const lastGoodMove = useRef<{ from: Square; to: Square } | null>(null)
   // Timers are cancelled on unmount and on puzzle change so a pending reply
@@ -143,6 +158,7 @@ export default function PuzzleSolver({
     lastGoodMove.current = null
     startedAt.current = Date.now()
     completed.current = false
+    scoredOnce.current = false
 
     // Play the opponent's blunder so the player sees it happen.
     later(() => {
@@ -177,11 +193,15 @@ export default function PuzzleSolver({
     (solved: boolean) => {
       if (completed.current) return
       completed.current = true
+      // The first run is the one that counts; anything after it is practice.
+      const replay = scoredOnce.current
+      scoredOnce.current = true
       onComplete({
         puzzleId: puzzle.id,
         solved,
         ms: Date.now() - startedAt.current,
-        hints: hintsUsed
+        hints: hintsUsed,
+        replay
       })
     },
     [onComplete, puzzle.id, hintsUsed]
@@ -402,10 +422,18 @@ export default function PuzzleSolver({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rewindRequest])
 
-  /** Back to the position the puzzle started from, mistakes and all retained. */
+  /**
+   * Back to the position the puzzle started from.
+   *
+   * Mid-attempt this keeps the mistakes already made — you are re-walking the
+   * same attempt. After the puzzle is over it is a fresh run instead: the
+   * result is already recorded, so counting the old mistakes against a practice
+   * repeat would be meaningless.
+   */
   useEffect(() => {
     if (restartRequest === 0) return
-    if (state === 'failed') return
+
+    const replaying = completed.current
 
     clearTimers()
     const game = new Chess(puzzle.fen)
@@ -427,6 +455,22 @@ export default function PuzzleSolver({
     setWrongSquare(null)
     setState('waiting')
     play('move')
+
+    if (replaying) {
+      // Re-arm `finish`, and start the clock and the counters over.
+      completed.current = false
+      setMistakes(0)
+      setHintsUsed(0)
+      startedAt.current = Date.now()
+    }
+
+    // The parent derives "this puzzle is over" from progress, so it has to hear
+    // that the board is live again or the controls stay locked.
+    onProgress?.({
+      mistakes: replaying ? 0 : mistakesRef.current,
+      solved: false,
+      canRewind: false
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restartRequest])
 

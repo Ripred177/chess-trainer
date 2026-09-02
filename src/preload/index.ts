@@ -80,6 +80,9 @@ const api = {
     }): Promise<WoodpeckerSet> => ipcRenderer.invoke('training:startWoodpecker', input),
     recordWoodpecker: (input: { solved: boolean; ms: number }): Promise<WoodpeckerSet | null> =>
       ipcRenderer.invoke('training:recordWoodpecker', input),
+    /** Same puzzles, cycle one again. The previous run is archived. */
+    restartWoodpecker: (): Promise<WoodpeckerSet | null> =>
+      ipcRenderer.invoke('training:restartWoodpecker'),
     archiveWoodpecker: (): Promise<void> => ipcRenderer.invoke('training:archiveWoodpecker'),
     recordEndgame: (
       positionId: string,

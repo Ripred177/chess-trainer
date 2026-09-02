@@ -132,10 +132,29 @@ export default function PuzzlesView(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, themes, range[0], range[1], puzzlesAvailable])
 
+  /**
+   * Play the current puzzle again from the start.
+   *
+   * The result is already recorded, so this clears only the presentation —
+   * the rating change and session tally stay as they were.
+   */
+  const replayPuzzle = useCallback(() => {
+    setRevealed(false)
+    setOutcome(null)
+    setRatingDelta(null)
+    setHintRequest(0)
+    setRestartRequest((n) => n + 1)
+  }, [])
+
   const onComplete = useCallback(
     async (result: PuzzleResult) => {
       if (!current) return
       setOutcome(result)
+
+      // A replay is practice: showing how it went is useful, changing the
+      // rating a second time for the same puzzle is not.
+      if (result.replay) return
+
       setSession((s) => ({ solved: s.solved + (result.solved ? 1 : 0), attempted: s.attempted + 1 }))
 
       const before = playerRating
@@ -376,11 +395,14 @@ export default function PuzzlesView(): React.JSX.Element {
                 </button>
                 <button
                   className="btn"
-                  onClick={() => setRestartRequest((n) => n + 1)}
-                  disabled={finished}
-                  title="Back to the start of this puzzle"
+                  onClick={replayPuzzle}
+                  title={
+                    finished
+                      ? 'Play this puzzle again. Your recorded result will not change.'
+                      : 'Back to the start of this puzzle'
+                  }
                 >
-                  <RotateCcw size={15} /> Restart
+                  <RotateCcw size={15} /> {finished ? 'Try again' : 'Restart'}
                 </button>
 
                 <button className="btn btn-primary col-span-2" onClick={loadNext}>
