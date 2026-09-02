@@ -377,7 +377,7 @@ export default function PlayView(): React.JSX.Element {
       <div className="p-8 max-w-5xl mx-auto">
         <PageHeader
           title="Play"
-          subtitle="Pick a pace and an opponent. Ratings below 1320 are emulated, so the weaker bots make the kind of mistakes people actually make."
+          subtitle="Pick a pace and an opponent. Every rating is a model trained on real players at that level, so the weaker bots make the mistakes people actually make."
         />
 
         <TimeControlPicker

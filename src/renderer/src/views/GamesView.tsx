@@ -394,7 +394,7 @@ function GameDetail({ game, onBack }: { game: GameRecord; onBack: () => void }):
               ) : (
                 <>
                   <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
-                    Have Stockfish grade every move and name the better one where you went wrong. Takes
+                    Grade every move against what a strong human would play, and name the better one where you went wrong. Takes
                     roughly a second per two moves, and the result is saved with the game.
                   </p>
                   <button className="btn btn-primary w-full" onClick={runReview}>

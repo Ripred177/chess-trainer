@@ -4,20 +4,23 @@ import { join } from 'node:path'
 /**
  * Resolves bundled resources in both dev and packaged builds.
  *
- * In development the files sit under `resources/` at the project root, with the
- * engine split per platform since each needs its own native binary. Once
- * packaged, electron-builder copies only the relevant platform's engine to
- * `<resources>/engine`, so the subdirectory disappears.
+ * In development the files sit under `resources/` at the project root; once
+ * packaged, electron-builder copies them to `process.resourcesPath`. The layout
+ * below that point is the same either way.
  */
 function resourceDir(): string {
   return app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
 }
 
+/**
+ * The Maia-3 weights.
+ *
+ * Unlike the engine binary this replaced, the model is the same file on every
+ * platform, so there is no per-platform subdirectory to resolve. Produce it
+ * with `npm run maia:export`.
+ */
 export function enginePath(): string {
-  const windows = process.platform === 'win32'
-  const binary = windows ? 'stockfish.exe' : 'stockfish'
-  if (app.isPackaged) return join(resourceDir(), 'engine', binary)
-  return join(resourceDir(), 'engine', windows ? 'win' : 'linux', binary)
+  return join(resourceDir(), 'engine', 'maia', 'maia3-5m.onnx')
 }
 
 export function puzzleDbPath(): string {

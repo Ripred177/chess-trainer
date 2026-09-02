@@ -3,8 +3,9 @@
 # Only the assets that cannot be regenerated live in the repository: the puzzle
 # bands (their source is a 3GB database that cannot be committed) and the PWA
 # icons (rasterising them needs Electron, and therefore a display, which a
-# runner does not have). Piece art and the WASM engine are copied out of the
-# repo and node_modules by `web:assets` on every run.
+# runner does not have). Piece art is copied out of the repo by `web:assets`,
+# and the Maia model is exported from the published checkpoint on every run -
+# the weights are not committed either.
 #
 # A project site is served from https://<user>.github.io/<repo>/, so the build
 # needs BASE_PATH set to that subdirectory or every asset resolves to the wrong
@@ -54,7 +55,27 @@ jobs:
           # enabling it by hand in Settings is an easy step to miss.
           enablement: true
 
-      - name: Copy piece art and the WASM engine
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Exporting needs PyTorch, which is a large download, so the wheels are
+      # cached between runs. Only the quantized model reaches the site.
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: maia-export-${{ runner.os }}-${{ hashFiles('scripts/maia/requirements.txt') }}
+
+      - name: Export the Maia model
+        run: |
+          python -m pip install --upgrade pip
+          # The CPU wheel is a fraction of the size of the default CUDA build.
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r scripts/maia/requirements.txt
+          npm run maia:export
+
+      - name: Copy piece art and the engine model
         run: npm run web:assets
 
       - name: Fail early if the puzzle data is missing

@@ -1,8 +1,8 @@
 # Builds the Windows installer and the Linux AppImage from a clean checkout.
 #
-# The heavy assets are not in the repository, so each runner fetches the engine
-# and the Lichess dump and rebuilds the puzzle database from scratch. That takes
-# a few minutes but keeps the repo small and the build reproducible.
+# The heavy assets are not in the repository, so each runner exports the Maia-3
+# model, fetches the Lichess dump and rebuilds the puzzle database from scratch.
+# That takes a few minutes but keeps the repo small and the build reproducible.
 #
 # AppImage cannot be produced on a Windows host, which is the whole reason this
 # workflow exists: the Linux job runs on a Linux runner.
@@ -22,10 +22,8 @@ jobs:
         include:
           - os: windows-latest
             platform: win
-            engine: stockfish-windows-x86-64-avx2.zip
           - os: ubuntu-latest
             platform: linux
-            engine: stockfish-ubuntu-x86-64-avx2.tar
 
     runs-on: ${{ matrix.os }}
 
@@ -43,25 +41,33 @@ jobs:
       - name: Ensure Electron binary
         run: node node_modules/electron/install.js
 
-      - name: Fetch Stockfish (Windows)
-        if: matrix.platform == 'win'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Exporting needs PyTorch, which is a large download, so the wheels are
+      # cached between runs. The exported model itself is only a few megabytes.
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: maia-export-${{ runner.os }}-${{ hashFiles('scripts/maia/requirements.txt') }}
+
+      - name: Export Maia-3 model
         shell: bash
         run: |
-          mkdir -p assets/raw resources/engine/win
-          curl -L -o assets/raw/sf.zip \
-            "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/${{ matrix.engine }}"
-          unzip -j assets/raw/sf.zip '*/stockfish*.exe' -d resources/engine/win
-          mv resources/engine/win/stockfish-*.exe resources/engine/win/stockfish.exe
+          python -m pip install --upgrade pip
+          # The CPU wheel is a fraction of the size of the default CUDA build.
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r scripts/maia/requirements.txt
+          npm run maia:export
 
-      - name: Fetch Stockfish (Linux)
-        if: matrix.platform == 'linux'
+      # Runs after the export because the inference tests check the TypeScript
+      # engine against the real model.
+      - name: Typecheck and test
         run: |
-          mkdir -p assets/raw resources/engine/linux
-          curl -L -o assets/raw/sf.tar \
-            "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/${{ matrix.engine }}"
-          tar -xf assets/raw/sf.tar -C assets/raw stockfish/stockfish-ubuntu-x86-64-avx2
-          mv assets/raw/stockfish/stockfish-ubuntu-x86-64-avx2 resources/engine/linux/stockfish
-          chmod +x resources/engine/linux/stockfish
+          npm run typecheck
+          npm test
 
       - name: Fetch piece sets
         run: npm run assets:pieces

@@ -32,6 +32,31 @@ Fifteen of those sets are licensed CC BY-NC-SA 4.0 and may not be used
 commercially. The Settings screen flags each of these individually.
 
 --------------------------------------------------------------------------
+Maia-3
+--------------------------------------------------------------------------
+    Maia-3 human-like chess models
+    Copyright (c) the Computational Social Science Lab,
+    University of Toronto
+    https://github.com/CSSLab/maia3
+    Licensed under the GNU Affero General Public License v3
+
+Maia-3 provides both the opponents and the position evaluation. The
+published PyTorch weights are converted to ONNX by
+scripts/maia/export_maia_onnx.py and shipped in resources/engine/maia; the
+web build additionally ships an int8-quantized copy of the same weights.
+
+The conversion changes the file format and replaces RMSNorm with an
+arithmetically identical decomposition so the graph exports at ONNX opset
+17. The model itself is otherwise unmodified, and the export is verified
+against the reference PyTorch implementation before it is written.
+
+Note that the AGPL is more demanding than the GPL this application uses:
+if you make a modified version of Maia-3 available to users over a network,
+section 13 requires you to offer them its source. Shipping the desktop app
+or serving the web build as static files is ordinary distribution and does
+not trigger that clause.
+
+--------------------------------------------------------------------------
 Stockfish
 --------------------------------------------------------------------------
     Stockfish chess engine
@@ -39,7 +64,10 @@ Stockfish
     https://github.com/official-stockfish/Stockfish
     Licensed under the GNU General Public License v3
 
-Stockfish is bundled unmodified as a separate executable in resources/engine.
+Stockfish is no longer shipped. It remains a development dependency, used
+only by scripts/verify-endgames.mjs to check the endgame drill positions at
+build time, because verifying a forced win needs exact search rather than a
+prediction of human play.
 
 --------------------------------------------------------------------------
 Lichess puzzle database

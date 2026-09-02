@@ -2,20 +2,46 @@
  * Checks every position in the endgame library: that the FEN is legal, and
  * that the engine's verdict matches the theoretical result claimed.
  *
+ * This still uses Stockfish, deliberately. The app itself plays and analyses
+ * with Maia-3, which predicts what a human would do — a useful thing to know
+ * and the wrong tool entirely for deciding whether a position is a forced win.
+ * Confirming that needs exact search, so this build-time check keeps a real
+ * engine.
+ *
+ * Stockfish is no longer bundled with the app, so point CHESS_TRAINER_SF at a
+ * binary you have, or drop one at the default path below.
+ *
  * One engine process per position, with stdin held open — closing it makes
  * Stockfish exit before the search produces a score, and sending `quit`
  * aborts the search for the same reason.
  */
 import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { Chess } from 'chess.js'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ENGINE = resolve(dirname(fileURLToPath(import.meta.url)), '../resources/engine/win/stockfish.exe')
+const here = dirname(fileURLToPath(import.meta.url))
+const ENGINE =
+  process.env.CHESS_TRAINER_SF ??
+  resolve(here, '../resources/engine/stockfish' + (process.platform === 'win32' ? '.exe' : ''))
+
+if (!existsSync(ENGINE)) {
+  console.error(
+    [
+      `Stockfish not found at ${ENGINE}.`,
+      '',
+      'The app ships Maia-3 and no longer bundles Stockfish, but verifying a',
+      'forced win needs exact search rather than a prediction of human play.',
+      'Download a build from https://stockfishchess.org/download/ and either',
+      'place it at the path above or set CHESS_TRAINER_SF to point at it.'
+    ].join('\n')
+  )
+  process.exit(1)
+}
 const MOVETIME = 4000
 
-const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/renderer/src/data/endgames.ts'), 'utf8')
+const src = readFileSync(resolve(here, '../src/renderer/src/data/endgames.ts'), 'utf8')
 const re = /id: '([^']+)',\s*\n\s*name: '([^']*)',[\s\S]*?fen: '([^']+)',\s*\n\s*goal: '(win|draw)'/g
 const positions = [...src.matchAll(re)].map((m) => ({ id: m[1], name: m[2], fen: m[3], goal: m[4] }))
 console.log(`parsed ${positions.length} positions\n`)

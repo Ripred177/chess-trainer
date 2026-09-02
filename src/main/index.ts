@@ -71,7 +71,8 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit()
   })
 
-  // Stockfish is a child process; without this it can outlive the app.
+  // The engine no longer spawns a child process, but the puzzle database and
+  // the netplay sockets still need closing before the app goes away.
   app.on('before-quit', async (event) => {
     if (!disposeIpc) return
     event.preventDefault()

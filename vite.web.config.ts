@@ -81,9 +81,10 @@ export default defineConfig({
       },
 
       workbox: {
-        // The engine alone is 1.6MB and the puzzle bands are ~1.3MB each, so
-        // the default 2MB precache ceiling has to come up.
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        // The onnxruntime WASM runtime is ~14MB and the Maia weights ~7MB, so
+        // the default 2MB precache ceiling has to come up a long way. Both
+        // compress well in transit and are cached once, for good.
+        maximumFileSizeToCacheInBytes: 32 * 1024 * 1024,
 
         // Precache the shell, the art, and the engine — everything needed to
         // start and play a game with no network at all.
@@ -93,6 +94,9 @@ export default defineConfig({
         // 15MB, and most players never touch more than two of them.
         globPatterns: [
           '**/*.{js,css,html,wasm,svg,png,woff2}',
+          // The engine is the model plus the runtime; without both, an offline
+          // launch has no opponent at all.
+          'engine/*.onnx',
           'puzzles/index.json',
           'puzzles/daily.json'
         ],

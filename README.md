@@ -1,24 +1,26 @@
 # Chess Trainer
 
-A desktop chess app: play Stockfish at any strength from beginner to grandmaster,
-solve six million puzzles, and work through a curriculum that runs from "this is
-how a knight moves" to expert endgame technique.
+A desktop chess app: play opponents that move like real players at any rating
+from 600 to 2600, solve six million puzzles, and work through a curriculum that
+runs from "this is how a knight moves" to expert endgame technique.
 
 Everything runs locally. No account, no server, no network access at runtime.
 
 ## What's in it
 
-**Play** — thirteen opponents from 300 to 3190 Elo, at any pace: untimed, or
+**Play** — eleven opponents from 600 to 2600 Elo, at any pace: untimed, or
 sixteen standard time controls across bullet, blitz, rapid, and classical, plus
-a custom builder. In a timed game the engine is handed both clocks and budgets
-its own thinking time, so it speeds up when it is short — and ratings are
-tracked per pace, since bullet strength and classical strength are not the same
-skill. Stockfish's own strength
-limiter only reaches down to 1320, so everything below that is emulated: the
-engine searches a couple of ply and then picks from its ranked move list with a
-softmax whose temperature widens as the rating drops. The result is a bot that
-hangs pieces and misses forks like a real beginner, instead of playing perfectly
-and then throwing in a random blunder.
+a custom builder. Ratings are tracked per pace, since bullet strength and
+classical strength are not the same skill.
+
+The opponents are Maia-3, a model trained on human games at each rating band. It
+does not search — it predicts the move a player of the requested rating would
+actually make. That matters most at the bottom of the ladder: a handicapped
+engine finds the best move and then discards it, which produces blunders no
+human would ever choose, whereas a model of a 700 hangs the piece a 700 hangs
+and misses the fork a 700 misses. The ladder stops at 600 and 2600 because that
+is the range the model was trained on; outside it, the model is extrapolating
+into behaviour nobody measured.
 
 **Puzzles** — the full Lichess puzzle database, 6,100,960 positions rated 399 to
 3322, filterable by 73 tactical themes and any rating band. Your puzzle rating
@@ -81,8 +83,8 @@ rather than a rewrite.
 the arrow keys, flip the board, copy the PGN or the FEN of the position you are
 looking at, or hand the whole game to the Analysis board.
 
-**Review** grades each move against Stockfish and names the move you should have
-played. Classification uses the *drop in win probability* a move causes, not raw
+**Review** grades each move against the model at its strongest setting and names
+the move you should have played. Classification uses the *drop in win probability* a move causes, not raw
 centipawns: giving up 300 centipawns while already completely winning barely
 changes the outcome, whereas the same loss in a level position is decisive, and
 counting centipawns alone marks the first as a blunder and misleads. Reviews are
@@ -92,8 +94,12 @@ The review costs one search per position rather than two. The evaluation *after*
 a move is the evaluation of the next position with its sign flipped, so a game
 of N moves needs N+1 searches, not 2N.
 
-**Analysis** — full-strength Stockfish with three principal variations, live
-streaming evaluation, and FEN/PGN import.
+**Analysis** — the model's ranked candidates, each with the probability a strong
+human plays it and its own win/draw/loss estimate, plus FEN/PGN import. There is
+no depth to report and no principal variation: every number comes from a single
+forward pass. What you get is "here is what strong players do here", which is a
+different and sometimes more useful question than "here is the objectively best
+line".
 
 **Customisation** — 18 board themes with every colour individually editable, 41
 piece sets, adjustable board size, animation speed, move input mode, and
@@ -163,14 +169,17 @@ cd node_modules/esbuild && node install.js
 The engine, the puzzle database, and the piece art are all downloaded rather
 than committed — together they are about 3.4GB.
 
-```bash
-mkdir -p assets/raw resources/engine
+The engine is a Maia-3 checkpoint converted to ONNX. That conversion needs
+Python and PyTorch, but only here, at build time: the app runs the model through
+onnxruntime and has no Python dependency at all.
 
-# Stockfish 18 (GPLv3). Pick sse41-popcnt instead of avx2 for pre-2013 CPUs.
-curl -L -o assets/raw/stockfish-win.zip \
-  https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-windows-x86-64-avx2.zip
-unzip -j assets/raw/stockfish-win.zip '*/stockfish*.exe' -d resources/engine
-mv resources/engine/stockfish-windows-x86-64-avx2.exe resources/engine/stockfish.exe
+```bash
+mkdir -p assets/raw
+
+# Maia-3 (AGPLv3). Writes the desktop and web models into resources/engine/maia,
+# verifying each against the PyTorch reference before it lands.
+python -m pip install -r scripts/maia/requirements.txt
+npm run maia:export
 
 # Puzzle database (CC0), ~290MB compressed.
 curl -L -o assets/raw/lichess_db_puzzle.csv.zst \
@@ -202,9 +211,9 @@ npm run dist:linux   # AppImage        -> release/*.AppImage   (Linux host only)
 npm run dist:all     # both            (Linux host only)
 ```
 
-Each platform ships only its own Stockfish binary (`resources/engine/win` or
-`resources/engine/linux`), plus the puzzle database. The database is the bulk of
-the download.
+Both platforms ship the identical model (`resources/engine/maia`) — ONNX weights
+are portable in a way a native engine binary is not — plus the puzzle database.
+The database is the bulk of the download.
 
 ### AppImage cannot be built on Windows
 
@@ -265,8 +274,10 @@ runtime, so that one is belt and braces.
 
 There is a second target: the same app as an installable web page, for playing
 on a phone. It shares the entire renderer and swaps only the layer under
-`window.chess` — WASM Stockfish instead of the native binary, sharded JSON
-instead of SQLite, IndexedDB instead of a file.
+`window.chess` — the same Maia model under onnxruntime-web instead of
+onnxruntime-node, sharded JSON instead of SQLite, IndexedDB instead of a file.
+Because both builds drive the model through the same shared code, the opponents
+play identically on the web and on the desktop.
 
 ```bash
 npm run web:puzzles   # once: sample the database into JSON bands
@@ -316,7 +327,7 @@ descriptor". `scripts/lib/zstd-frames.mjs` walks the chain itself.
 
 ```
 src/main/         Electron main process
-  engine.ts       Stockfish UCI driver, including sub-1320 Elo emulation
+  engine.ts       Loads the Maia model and serves searches to the renderer
   db.ts           Puzzle queries against the SQLite database
   profile.ts      Glicko ratings, game history, spaced-repetition lessons
   ipc.ts          The complete privileged surface exposed to the renderer
@@ -336,7 +347,9 @@ scripts/          Asset fetching, database construction, and piece generation
 
 The app bundles third-party assets under their own terms:
 
-- **Stockfish** — GPLv3. Bundled unmodified as a separate executable.
+- **Maia-3** — AGPLv3, by the CSSLab at the University of Toronto. Provides both
+  the opponents and the analysis. Shipped as ONNX weights converted from the
+  published PyTorch checkpoint.
 - **Lichess puzzle database** — CC0.
 - **Piece sets** — terms vary per set. Fifteen of the forty Lichess sets are
   CC BY-NC-SA, which permits personal use but **not** commercial distribution.
@@ -354,8 +367,16 @@ The app bundles third-party assets under their own terms:
   obligation of its own. Other permissive options already on disk are `celtic`,
   `fantasy`, and `spatial` (MIT), `rhosgfx` (CC0), and `cburnett` (GPLv2+).
 
-Because Stockfish is GPLv3 and is shipped alongside the app, distributing the
-packaged build means complying with the GPL.
+Because Maia-3 is AGPLv3 and is shipped alongside the app, distributing the
+packaged build means complying with that licence. The AGPL asks for one thing
+the GPL does not: if you offer a *modified* Maia to users over a network, you
+must offer them its source too. Shipping the installers, or serving the web
+build as static files that run in the visitor's own browser, is ordinary
+distribution and does not engage that clause.
+
+Stockfish is no longer shipped. It survives as a development dependency for
+`scripts/verify-endgames.mjs`, because confirming that an endgame really is a
+forced win needs exact search, which a model of human play cannot provide.
 
 ## Clock behaviour
 
@@ -420,32 +441,34 @@ modes, which is what distinguishes modal synthesis from filtered noise.
 
 ## Memory
 
-Measured on the packaged Windows build, working set across all processes.
+Moving to Maia largely dissolved the problem this section used to describe, so
+what follows is history plus one caveat.
 
-Three Stockfish processes used to be created on demand and then kept forever,
-each holding a hash table on top of a ~150MB baseline — the NNUE evaluation
-networks alone are 125MiB and are resident per process. After playing a game,
-analysing, and taking a hint, that reached **1.67GB**.
+Under Stockfish, three engine processes were created on demand and then kept
+forever, each holding a hash table on top of a ~150MB baseline — the NNUE
+evaluation networks alone are 125MiB and are resident per process. After playing
+a game, analysing, and taking a hint, the app reached **1.67GB**. Sharing one
+process between review and analysis, shutting idle engines down, and shrinking
+the hash tables brought that to ~1.06GB in use and back to ~390MB when idle.
 
-| | Before | After |
+Maia replaces all of it with a single stateless ONNX session over 5.2M
+parameters — about 21MB of weights, with no hash table and nothing to keep warm
+between searches. Play and analysis share one session because there is no longer
+any reason not to: inference holds no state that two callers could corrupt.
+`EnginePool` survives only to share that one load and to unload it after five
+idle minutes.
+
+Measured on the built app via `npm start` (not the packaged installer, so not
+strictly comparable to the figures above, which were):
+
+| | Stockfish | Maia |
 | --- | --- | --- |
-| Idle, nothing used | 390 MB | 390 MB |
-| After play + analysis + review | 1674 MB | 1056 MB |
-| Idle again, 3 minutes later | 1674 MB | ~390 MB |
+| At launch, nothing used | 390 MB | 401 MB |
+| After a game and a hint | 1056 MB | 565 MB |
 
-Three changes, in order of what they bought:
-
-- **Review shares the analysis engine.** They are never used simultaneously —
-  review backs the hint button, analysis backs the Analysis screen — so the
-  third process was pure cost.
-- **Idle engines are shut down** after three minutes, and restart transparently
-  on next use. This is what returns a long session to its idle footprint.
-- **Smaller hash tables**: analysis 256MB to 128MB, play 64MB to 32MB.
-
-The play hash was sized by measurement rather than taste. On a 2s search, 16MB
-cost roughly ten ply of depth against larger tables, while 32MB came within a
-couple of ply — so 16MB was rejected and 32MB kept. Every size found the same
-move, and nodes per second barely moved.
+The engine is no longer what dominates this. What remains is Electron itself
+plus the renderer, and the model is a rounding error against the puzzle
+database's memory-mapped pages.
 
 The remaining ~390MB is Chromium itself (GPU, renderer, network, and main
 processes) and is not meaningfully reducible without hurting rendering.
@@ -466,6 +489,6 @@ processes) and is not meaningfully reducible without hurting rendering.
   from Electron without a native addon. Rich Presence is feasible from Node and
   would give a working Join button, but Discord relays no game data — the
   connection still has to be ours.
-- **Windows only as packaged.** The code is cross-platform; `paths.ts` already
-  picks the right binary name, but only the Windows Stockfish build is fetched
-  and only an NSIS target is configured.
+- **Windows only as packaged.** The code is cross-platform and the model is now
+  identical on every platform, so only the NSIS target being configured remains
+  in the way.

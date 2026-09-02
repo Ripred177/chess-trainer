@@ -15,6 +15,11 @@ files:
 
 asar: true
 
+# onnxruntime-node ships a native addon and its runtime libraries. Those cannot
+# be loaded from inside an asar archive, so they have to stay on disk.
+asarUnpack:
+  - "**/node_modules/onnxruntime-node/**"
+
 # Compressing a 3GB database costs a great deal of build time for very little,
 # since the SQLite file is already dense.
 compression: store
@@ -24,12 +29,19 @@ win:
     - target: nsis
       arch: [x64]
   artifactName: ${productName}-${version}-win-${arch}.${ext}
-  # The engine is a native binary, so each platform gets only its own build.
+  # onnxruntime-node carries prebuilt bindings for every platform it supports,
+  # 283MB in total. Ship only the one this build can load.
+  files:
+    - "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**"
+    - "!node_modules/onnxruntime-node/bin/napi-v6/linux/**"
+    - "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**"
+  # The engine is now a portable ONNX model rather than a native binary, so both
+  # platforms ship the identical file.
   extraResources:
     - from: resources/puzzles.db
       to: puzzles.db
-    - from: resources/engine/win
-      to: engine
+    - from: resources/engine/maia
+      to: engine/maia
 
 nsis:
   oneClick: false
@@ -41,15 +53,23 @@ nsis:
 
 linux:
   target:
+    # AppImage needs a Linux host (see README); the tarball builds anywhere and
+    # is what the Linux release actually ships.
+    - target: tar.gz
+      arch: [x64]
     - target: AppImage
       arch: [x64]
   artifactName: ${productName}-${version}-linux-${arch}.${ext}
   category: Game
-  synopsis: Play Stockfish, solve six million puzzles, and learn chess
+  files:
+    - "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**"
+    - "!node_modules/onnxruntime-node/bin/napi-v6/win32/**"
+    - "!node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**"
+  synopsis: Play human-like bots, solve six million puzzles, and learn chess
   # Lets desktop environments associate the running window with the launcher.
   syncDesktopName: true
   extraResources:
     - from: resources/puzzles.db
       to: puzzles.db
-    - from: resources/engine/linux
-      to: engine
+    - from: resources/engine/maia
+      to: engine/maia

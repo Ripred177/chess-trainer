@@ -11,7 +11,7 @@ type ChessApi = Window['chess']
  * entire renderer runs unchanged in a browser.
  *
  * Three things differ underneath:
- *  - the engine is a WASM Web Worker rather than a native process over stdio,
+ *  - the engine loads its ONNX weights over HTTP rather than from disk,
  *  - puzzles come from sharded JSON rather than SQLite,
  *  - the profile lives in IndexedDB rather than a file in userData.
  *
@@ -21,7 +21,9 @@ type ChessApi = Window['chess']
  */
 
 const PUZZLE_BASE = `${import.meta.env.BASE_URL}puzzles/`
-const ENGINE_SCRIPT = `${import.meta.env.BASE_URL}engine/stockfish.js`
+// The quantized model: a third the size of the desktop weights, for a download
+// every visitor pays. See src/web/platform/engine.ts.
+const ENGINE_MODEL = `${import.meta.env.BASE_URL}engine/maia3-5m.int8.onnx`
 
 function notAvailableTraining(): Promise<never> {
   return Promise.reject(new Error('Structured training is only available in the desktop app.'))
@@ -34,15 +36,15 @@ function notAvailable(): Promise<never> {
 const OFFLINE: NetStatus = { role: 'idle', state: 'offline' }
 
 export async function installWebPlatform(): Promise<void> {
-  const engine = new WebEngine(ENGINE_SCRIPT)
+  const engine = new WebEngine(ENGINE_MODEL)
   const puzzles = new WebPuzzles(PUZZLE_BASE)
   const profile = new WebProfile()
 
   await profile.load()
 
-  // Two searches never overlap in this build — there is one worker and one
-  // engine — so play, analysis, and review all address the same instance.
-  // `abort` therefore ignores which slot the caller named.
+  // One loaded model serves everything. Inference is stateless, so unlike the
+  // single Stockfish worker this replaced there is nothing to serialise and
+  // `abort` can ignore which slot the caller named.
   const infoListeners = new Set<(info: EngineInfo) => void>()
   engine.onInfo((info) => {
     for (const listener of infoListeners) listener(info)
@@ -150,7 +152,7 @@ export async function installWebPlatform(): Promise<void> {
         userData: profile.persistent ? 'Browser storage (IndexedDB)' : 'Memory only — nothing is saved',
         profilePath: profile.persistent ? 'IndexedDB: chess-trainer/profile' : 'not persisted',
         puzzleDbPath: PUZZLE_BASE,
-        enginePath: ENGINE_SCRIPT
+        enginePath: ENGINE_MODEL
       }),
       openExternal: async (url: string) => {
         window.open(url, '_blank', 'noopener,noreferrer')

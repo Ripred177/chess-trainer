@@ -64,7 +64,7 @@ export default function HomeView(): React.JSX.Element {
         title={`Welcome back, ${profile?.displayName ?? 'Player'}`}
         subtitle={
           stats
-            ? `${stats.total.toLocaleString()} puzzles ready, and Stockfish 18 standing by.`
+            ? `${stats.total.toLocaleString()} puzzles ready, and eleven human-like opponents standing by.`
             : 'Everything runs locally on this machine.'
         }
       />

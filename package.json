@@ -1,7 +1,7 @@
 {
   "name": "chess-trainer",
   "version": "0.1.0",
-  "description": "A desktop chess trainer: play Stockfish at any Elo, solve millions of puzzles, and learn from beginner to expert.",
+  "description": "A desktop chess trainer: play human-like bots at any rating, solve millions of puzzles, and learn from beginner to expert.",
   "main": "./out/main/index.js",
   "author": "Greg",
   "license": "GPL-3.0",
@@ -17,7 +17,7 @@
     "assets:pieces": "node scripts/fetch-piece-sets.mjs && node scripts/make-bunny-pieces.mjs",
     "assets:bunny": "node scripts/make-bunny-pieces.mjs",
     "dist:win": "npm run build && electron-builder --win --publish never",
-    "dist:linux": "npm run build && electron-builder --linux --publish never",
+    "dist:linux": "npm run build && electron-builder --linux tar.gz --publish never",
     "dist:all": "npm run build && electron-builder --win --linux --publish never",
     "assets:icon": "electron scripts/icon/render-icon.mjs build/icon.svg build/icon.png 1024",
     "sounds:preview": "node scripts/preview-sounds.mjs",
@@ -30,11 +30,14 @@
     "web:serve": "node scripts/serve.mjs dist-web --https --port 8443 --http-port 8080",
     "web:serve:http": "node scripts/serve.mjs dist-web --port 8080",
     "web:icons": "node scripts/build-web-icons.mjs",
+    "maia:export": "python scripts/maia/export_maia_onnx.py",
     "puzzles:openings": "node scripts/build-opening-index.mjs",
-    "verify:endgames": "node scripts/verify-endgames.mjs"
+    "verify:endgames": "node scripts/verify-endgames.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "chess.js": "^1.4.0",
+    "onnxruntime-node": "^1.29.0",
     "ws": "^8.21.3"
   },
   "devDependencies": {
@@ -48,6 +51,7 @@
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "lucide-react": "^1.34.0",
+    "onnxruntime-web": "^1.29.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "stockfish.js": "^10.0.2",
@@ -55,6 +59,7 @@
     "typescript": "~5.9.0",
     "vite": "^7.1.14",
     "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^4.1.11",
     "zustand": "^5.0.15"
   },
   "desktopName": "chess-trainer.desktop"

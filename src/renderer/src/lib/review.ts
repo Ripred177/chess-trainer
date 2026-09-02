@@ -49,6 +49,15 @@ interface PositionEval {
   mate: number | null
   /** The engine's preferred move, in UCI. */
   best: string | null
+  /**
+   * Expected score for the side to move, 0-1, straight from the engine's
+   * win/draw/loss head.
+   *
+   * This is what the classification actually wants. The centipawn figure the
+   * engine reports is derived *from* this by the inverse of `winProbability`,
+   * so reading it here avoids a lossy round-trip through a rounded integer.
+   */
+  score: number | null
 }
 
 /** Collapse an evaluation to plain centipawns for comparison. */
@@ -110,14 +119,20 @@ export async function reviewGame(pgn: string, options: ReviewOptions = {}): Prom
     const probe = new Chess(positions[i])
     // A finished position has no move to find; the result is already decided.
     if (probe.isGameOver()) {
-      evaluations.push({ cp: probe.isCheckmate() ? -MATE_CP : 0, mate: null, best: null })
+      evaluations.push({
+        cp: probe.isCheckmate() ? -MATE_CP : 0,
+        mate: null,
+        best: null,
+        score: probe.isCheckmate() ? 0 : 0.5
+      })
     } else {
       const result = await window.chess.engine.evaluate({ fen: positions[i], depth })
       const line = result.info?.lines[0]
       evaluations.push({
         cp: line?.cp ?? null,
         mate: line?.mate ?? null,
-        best: result.bestmove
+        best: result.bestmove,
+        score: line?.wdl ? line.wdl.win + line.wdl.draw / 2 : null
       })
     }
 
@@ -135,14 +150,18 @@ export async function reviewGame(pgn: string, options: ReviewOptions = {}): Prom
     const beforeCp = toCp(before)
     const afterCp = -toCp(after)
 
-    const wpBefore = winProbability(
-      before.mate != null ? null : beforeCp,
-      before.mate != null ? before.mate : null
-    )
-    const wpAfter = winProbability(
-      after.mate != null ? null : afterCp,
-      after.mate != null ? -after.mate : null
-    )
+    // Prefer the engine's own win/draw/loss when it reports one. `after` is
+    // from the opponent's point of view, so it is flipped onto the mover's.
+    const wpBefore =
+      before.score ??
+      winProbability(before.mate != null ? null : beforeCp, before.mate != null ? before.mate : null)
+    const wpAfter =
+      after.score != null
+        ? 1 - after.score
+        : winProbability(
+            after.mate != null ? null : afterCp,
+            after.mate != null ? -after.mate : null
+          )
 
     const winDrop = Math.max(0, wpBefore - wpAfter)
     const loss = Math.max(0, beforeCp - afterCp)

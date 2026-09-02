@@ -36,7 +36,7 @@ const NAV: NavItem[] = [
   { id: 'train', label: 'Train', icon: Dumbbell, hint: 'Woodpecker, endgames, openings, studies' },
   { id: 'games', label: 'Games', icon: History, hint: 'Replay, export, and review your games' },
   { id: 'friends', label: 'Friends', icon: Users, hint: 'Play someone on your network' },
-  { id: 'analysis', label: 'Analysis', icon: Microscope, hint: 'Analyse any position with Stockfish' },
+  { id: 'analysis', label: 'Analysis', icon: Microscope, hint: 'Analyse any position with Maia' },
   { id: 'settings', label: 'Settings', icon: SettingsIcon, hint: 'Board, pieces, and engine' }
 ]
 

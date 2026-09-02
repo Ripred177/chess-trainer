@@ -553,18 +553,19 @@ function EngineTab(): React.JSX.Element {
   return (
     <>
       {/*
-        The browser engine is a single-threaded WASM build with a fixed 16MB
-        hash, so there is nothing here to tune. Showing dead sliders would be
-        worse than showing none.
+        The browser runs the same model as the desktop app, but onnxruntime-web
+        cannot use threads without cross-origin isolation, which GitHub Pages
+        cannot provide. There is nothing here to tune, and showing dead sliders
+        would be worse than showing none.
       */}
       {IS_WEB ? (
-        <Section title="Engine" description="Stockfish, compiled to WebAssembly.">
+        <Section title="Engine" description="Maia-3, running on WebAssembly.">
           <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            The web engine runs on one thread with a 16MB hash table, both fixed by the build, so
-            there is nothing to configure. It is meaningfully slower than the desktop app&rsquo;s
-            native Stockfish, and every opponent&rsquo;s strength is emulated by searching shallowly
-            and choosing among several candidate moves. The bots play as their rating suggests; the
-            engine itself is not at full strength.
+            The web build runs the same Maia-3 model as the desktop app, on a single thread
+            because browsers only allow more under cross-origin isolation. It also ships a smaller
+            quantized copy of the weights to keep the download reasonable, which changes its move
+            choice in roughly one position in seventy. The opponents are the same otherwise: each
+            rating is a model of how players at that level really move.
           </p>
         </Section>
       ) : (
@@ -580,18 +581,10 @@ function EngineTab(): React.JSX.Element {
             onChange={(v) => void updateSettings({ engineThreads: v })}
             format={(v) => `${v} thread${v > 1 ? 's' : ''}`}
           />
-          <Slider
-            label="Hash table"
-            value={settings.engineHashMb}
-            min={16}
-            max={4096}
-            step={16}
-            onChange={(v) => void updateSettings({ engineHashMb: v })}
-            format={(v) => `${v} MB`}
-          />
           <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
-            These affect analysis only. Opponents deliberately run on a single thread so a weak bot
-            cannot accidentally out-calculate its rating.
+            Threads speed up analysis, which scores several candidate moves at once. They make
+            almost no difference while playing, where each move is a single evaluation. There is no
+            hash size to set: the engine is a neural network with nothing to cache between moves.
           </p>
         </Section>
       )}
@@ -646,8 +639,9 @@ function EngineTab(): React.JSX.Element {
       <Section title="Credits">
         <div className="text-xs space-y-2" style={{ color: 'var(--text-secondary)' }}>
           <p>
-            <span className="font-semibold">Stockfish</span> — the chess engine, licensed GPLv3. Bundled
-            unmodified.
+            <span className="font-semibold">Maia-3</span> — the opponent and analysis model, by the
+            CSSLab at the University of Toronto, licensed AGPLv3. Converted to ONNX, unmodified in
+            substance.
           </p>
           <p>
             <span className="font-semibold">Lichess puzzle database</span> — over six million positions,

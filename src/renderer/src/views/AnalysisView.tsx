@@ -172,7 +172,7 @@ export default function AnalysisView(): React.JSX.Element {
     <div className="p-3 sm:p-6">
       <PageHeader
         title="Analysis"
-        subtitle="Play through any position with Stockfish at full strength."
+        subtitle="Play through any position and see what players at each rating would do."
         actions={
           <>
             <button className="btn" onClick={() => setOrientation((o) => (o === 'w' ? 'b' : 'w'))}>

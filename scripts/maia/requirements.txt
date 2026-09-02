@@ -1,0 +1,7 @@
+# Pinned loosely: the export only uses stable torch/onnx APIs.
+torch>=2.9
+onnx>=1.17
+onnxruntime>=1.20
+huggingface_hub>=0.26
+chess>=1.11
+numpy>=1.26

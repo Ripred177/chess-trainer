@@ -1,19 +1,36 @@
 /** Types shared between the Electron main process and the renderer. */
 
+import type { Wdl } from './maia/policy'
+
 export type Color = 'w' | 'b'
+
+export type { Wdl }
 
 // ---------------------------------------------------------------- engine ----
 
-/** A single principal variation reported by the engine at a given depth. */
+/**
+ * A single candidate move reported by the engine.
+ *
+ * The engine is Maia-3, which predicts human moves rather than searching, so
+ * `policy` and `wdl` are the real output. `cp` and `pv` are kept because the
+ * renderer was built against a Stockfish-shaped interface: `cp` is derived from
+ * `wdl` for display only and is not comparable to a Stockfish evaluation, and
+ * `pv` holds just the move itself, since there is no search tree behind it.
+ */
 export interface EngineLine {
   multipv: number
+  /** Always 1: one forward pass, no search. */
   depth: number
-  /** Centipawns from the side-to-move's point of view. Null when `mate` is set. */
+  /** Display-only centipawn figure derived from `wdl`. Null when unscored. */
   cp: number | null
-  /** Moves to mate, signed. Positive = side to move mates. Null when `cp` is set. */
+  /** Always null; Maia has no notion of a forced mate. */
   mate: number | null
-  /** Principal variation as UCI move strings, e.g. ['e2e4', 'e7e5']. */
+  /** The candidate move, as a single-element UCI list. */
   pv: string[]
+  /** How likely a player of the requested rating is to play this move. */
+  policy?: number
+  /** Win/draw/loss for the side to move, after this move. */
+  wdl?: Wdl
 }
 
 export interface EngineInfo {
@@ -33,14 +50,19 @@ export interface EngineResult {
 }
 
 /**
- * How strong the opponent should be. Stockfish's own UCI_Elo only reaches down
- * to 1320, so anything weaker is emulated in `engine.ts` by capping search and
- * deliberately choosing inferior moves.
+ * How strong the opponent should be.
+ *
+ * Maia-3 is trained on human games at each rating, so this is not a handicap
+ * applied to a strong engine - it selects which population of players to
+ * imitate. Ratings outside 600-2600 are clamped to that trained range.
  */
 export interface StrengthSpec {
-  /** Target Elo, 250-3190. */
+  /** Target Elo, 600-2600. */
   elo: number
-  /** Hard cap on thinking time per move. */
+  /**
+   * Hard cap on thinking time per move. Retained for the clock logic in the
+   * renderer; a forward pass takes a few milliseconds regardless.
+   */
   moveTimeMs: number
 }
 
