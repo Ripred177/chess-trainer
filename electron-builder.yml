@@ -12,6 +12,15 @@ files:
   # `ws` is externalised from the main-process bundle, so it has to ship as a
   # real module. electron-builder prunes devDependencies from this itself.
   - node_modules/**/*
+  # onnxruntime-node carries prebuilt bindings for every platform it supports,
+  # 283MB of them. Only x64 is ever built here, and macOS never.
+  #
+  # These live in the top-level list deliberately: a `files` array inside a
+  # platform section REPLACES this one rather than adding to it, which silently
+  # packs the entire project - the 3.4GB puzzle database included - into the
+  # asar and then fails the NSIS build on a mmap error.
+  - "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**"
+  - "!node_modules/onnxruntime-node/bin/napi-v6/*/arm64/**"
 
 asar: true
 
@@ -29,12 +38,6 @@ win:
     - target: nsis
       arch: [x64]
   artifactName: ${productName}-${version}-win-${arch}.${ext}
-  # onnxruntime-node carries prebuilt bindings for every platform it supports,
-  # 283MB in total. Ship only the one this build can load.
-  files:
-    - "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**"
-    - "!node_modules/onnxruntime-node/bin/napi-v6/linux/**"
-    - "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**"
   # The engine is now a portable ONNX model rather than a native binary, so both
   # platforms ship the identical file.
   extraResources:
@@ -61,10 +64,6 @@ linux:
       arch: [x64]
   artifactName: ${productName}-${version}-linux-${arch}.${ext}
   category: Game
-  files:
-    - "!node_modules/onnxruntime-node/bin/napi-v6/darwin/**"
-    - "!node_modules/onnxruntime-node/bin/napi-v6/win32/**"
-    - "!node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**"
   synopsis: Play human-like bots, solve six million puzzles, and learn chess
   # Lets desktop environments associate the running window with the launcher.
   syncDesktopName: true
