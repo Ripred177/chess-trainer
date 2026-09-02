@@ -38,19 +38,30 @@ async function main() {
   console.log(`  pieces  ${PIECES_DST}`)
 
   // --- engine --------------------------------------------------------------
-  // Cleared first: a stale engine left here would be picked up by the service
-  // worker's precache glob and shipped to every visitor.
-  await rm(ENGINE_DST, { recursive: true, force: true })
+  // The quantized model is committed under src/web/public/engine, so deploying
+  // the site needs nothing but this repository — exporting it requires PyTorch,
+  // which is far too much to install just to publish static files. A fresh
+  // export in resources/ wins when there is one, which is what picks up a model
+  // change during development.
   await mkdir(ENGINE_DST, { recursive: true })
-  const model = join(MAIA_SRC, MAIA_MODEL)
-  if (!existsSync(model)) {
+  const exported = join(MAIA_SRC, MAIA_MODEL)
+  const destination = join(ENGINE_DST, MAIA_MODEL)
+
+  if (existsSync(exported)) {
+    await cp(exported, destination)
+    console.log(`  engine  ${destination} (from resources/)`)
+  } else if (existsSync(destination)) {
+    console.log(`  engine  ${destination} (committed copy)`)
+  } else {
     throw new Error(
-      `Maia model missing at ${model}.
-Run \`npm run maia:export\` before building the web assets.`
+      [
+        `Maia model missing at ${destination}.`,
+        '',
+        'It should be committed to the repository. To regenerate it, run',
+        '`npm run maia:export` and commit the result.'
+      ].join('\n')
     )
   }
-  await cp(model, join(ENGINE_DST, MAIA_MODEL))
-  console.log(`  engine  ${ENGINE_DST}`)
 
   console.log(`\nWeb assets ready.`)
 }

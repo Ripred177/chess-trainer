@@ -6,6 +6,7 @@
 # Binary assets must never be touched.
 *.png binary
 *.wasm binary
+*.onnx binary
 *.zst binary
 *.db binary
 *.crt binary
